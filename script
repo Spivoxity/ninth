@@ -17,6 +17,9 @@
 : aligned 1- tuck + swap invert & ;
 : on 1 swap ! ;
 : off 0 swap ! ;
+: > swap < ;
+: <= > not ;
+: >= < not ;
 
 : xchg # Exchange between stack and memory
 dup @ -rot ! ;
@@ -78,12 +81,12 @@ dup here 2 - tok! here + dp ! ;
 : def>name MEM + 12 + ;
 
 : names 
-dict @ do dup while dup space def>name putstr def>next od pop ;
+dict @ do dup 0 >= while dup space def>name putstr def>next od pop nl ;
 
 # Disassembler
 : isword # Test if token is in the dictionary
 dict @ 
-do dup 0 = if pop pop 0 0 
+do dup 0 < if pop pop 0 0 
   else over over = if pop pop 1 0 else 1 fi fi 
 while def>next od ;
 
@@ -98,7 +101,7 @@ word find if
       else
         . 1
       fi
-    while 2 + od nl
+    while 2 + od nl pop
   else
     def>name putstr space ." is not a secondary" nl
   fi
@@ -109,8 +112,8 @@ fi ;
 
 
 
+dump
 
-' fac pop
 
 : fac dup if dup 1- fac * else pop 1 fi ;
 
@@ -120,3 +123,16 @@ fi ;
 
 9 faciter . nl # 362880
 
+: f dup g . nl ;
+
+: g * ;
+
+5 f
+
+dump
+
+dis faciter
+
+dump
+
+names

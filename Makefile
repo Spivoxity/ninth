@@ -1,5 +1,7 @@
 all: ninth
 
+CC = gcc
+
 NINTH = kernel.o
 ninth: $(NINTH)
-	gcc -o $@ $^
+	$(CC) -o $@ $^

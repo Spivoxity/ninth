@@ -2,9 +2,13 @@
 #include <string.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <assert.h>
 
 typedef unsigned char uchar;
 typedef unsigned short ushort;
+
+#define INBUF 256
+char inbuf[INBUF];
 
 // The RAM of the machine is represented by the mem array
 // The dictionary must go in mem so that definitions can be accessed
@@ -19,23 +23,23 @@ uchar mem[MEMSIZE];
 
 #define ALIGN(p, n) ((uchar *) (((unsigned) (p)+(n)-1) & ~((n)-1)))
 
-// At the bottom of mem is a buffer for the current input string
-char *inbuf = (char *) &mem[0];
-#define INBUF 256
+// At the bottom of mem is the dictionary area.  There's a chain of def 
+// records, each followed the word they it defines, represented as a 
+// null-terminated string.  These definitions are interleaved with 
+// static data, and each def record has a pointer to its data.
 
-// Next comes the dictionary area.  There's a chain of def records,
-// each followed the word they define, represented as a null-terminated 
-// string.  These definitions are interleaved with static data, and each
-// def record has a pointer to its data.
-
-#define dbase INBUF
+#define dbase 0
 
 typedef struct {
-     ushort d_next;             // Next record in the dictionary
+     short d_next;              // Next record in the dictionary
      ushort d_flags;            // Attributes of the word
      unsigned d_execute;        // Action when the word is executed
      uchar *d_data;             // Pointer to the word's body or data
 } def;
+
+#define def(t) ((def *) &mem[t])
+#define tok(d) ((uchar *) (d) - mem)
+#define def_name(d) ((char *) ((d)+1))
 
 #define IMMED 1
 
@@ -52,17 +56,19 @@ enum {
      P_GENTOK, P_IMMED
 };
 
-unsigned dict = 0;
+int dict = -1;
+
 uchar *dp = &mem[dbase];
 
 // At the top end of memory is the return stack, and below it, growing
 // towards the dictionary, is the eval stack.  The return stack has
 // four-byte entries.
 
-#define RSTACK 256
+#define sbase MEMSIZE
 
-#define rbase MEMSIZE
-#define sbase (MEMSIZE - RSTACK * sizeof(unsigned))
+#define RSTACK 256
+#define rbase (RSTACK * sizeof(unsigned))
+uchar *rstack[rbase];
 
 
 // Primitives
@@ -76,25 +82,22 @@ def *create(char *name) {
      dp += sizeof(def);
      strcpy(dp, name);
      dp += strlen(name)+1;
-     dp = ALIGN(dp, 2);
+     dp = ALIGN(dp, 4);
 
      p->d_next = dict;
      p->d_flags = 0;
      p->d_execute = P_UNKNOWN;
      p->d_data = NULL;
-     dict = (uchar *) p - mem;
+     dict = tok(p);
 
      return p;
 }
 
-#define def(d) ((def *) &mem[d])
-#define def_name(d) ((char *) ((d)+1))
-
 // find -- find dictionary entry
 def *find(char *name) {
-     unsigned d = dict;
+     int d = dict;
 
-     while (d != 0) {
+     while (d >= 0) {
           if (strcmp(name, def_name(def(d))) == 0)
                return def(d);
           d = def(d)->d_next;
@@ -113,27 +116,28 @@ def *find_create(char *name) {
 
 // Threaded interpreter
 
-unsigned *sp;
+int *sp;
 unsigned *rp;
 char *inp;
 int trace = 0;
 
 void init(void) {
-     sp = (unsigned *) &mem[sbase]; 
-     rp = (unsigned *) &mem[rbase];
+     sp = (int *) &mem[sbase]; 
+     rp = (unsigned *) &rstack[rbase];
 }
 
 void dump(void) {
      int *p;
 
-     for (p = (int *) sp; p < (int *) &mem[sbase]; p++)
+     for (p = sp; p < (int *) &mem[sbase]; p++)
           printf(" %d", *p);
 }
 
 void run(def *m) {
      ushort *ip;
      def *w;
-     unsigned t, x;
+     int t;
+     unsigned x;
 
      ip = (ushort *) m->d_data;
 
@@ -165,11 +169,11 @@ void run(def *m) {
                break;
 
           case P_EXIT:
-               if (rp >= (unsigned *) &mem[rbase]) return;
+               if (rp >= (unsigned *) &rstack[rbase]) return;
                ip = (ushort *) *rp++;
                break;
 
-#define binary(w) sp[1] = (unsigned) ((int) sp[1] w (int) sp[0]); sp++; break;
+#define binary(w) sp[1] = sp[1] w sp[0]; sp++; break;
 
           case P_ADD:
                binary(+); break;
@@ -211,10 +215,10 @@ void run(def *m) {
                // the address accessed is an alias of sp.
 
           case P_GET:
-               sp[0] = * (unsigned *) sp[0]; break;
+               sp[0] = * (int *) sp[0]; break;
 
           case P_PUT:
-               * (unsigned *) sp[0] = sp[1]; sp += 2; break;
+               * (int *) sp[0] = sp[1]; sp += 2; break;
 
           case P_CHGET:
                sp[0] = * (char *) sp[0]; break;
@@ -223,7 +227,7 @@ void run(def *m) {
                * (char *) sp[0] = sp[1]; sp += 2; break;
 
           case P_TOKGET:
-               sp[0] = (int) * (signed short *) sp[0]; break;
+               sp[0] = * (short *) sp[0]; break;
 
           case P_TOKPUT:
                * (short *) sp[0] = sp[1]; sp += 2; break;
@@ -243,15 +247,15 @@ void run(def *m) {
                break;
 
           case P_BRANCH0:
-               t = (int) (signed short) *ip++;
+               t = (signed short) *ip++;
                if (*sp++ == 0) ip += t;
                break;
 
           case P_BRANCH:
-               t = (int) (signed short) *ip++; ip += t; break;
+               t = (signed short) *ip++; ip += t; break;
 
           case P_LIT:
-               *--sp = (unsigned) (int) (signed short) *ip++; break;
+               *--sp = (signed short) *ip++; break;
 
           case P_LIT2:
                *--sp = (ip[1] << 16) + ip[0]; ip += 2; break;
@@ -261,16 +265,16 @@ void run(def *m) {
                goto reswitch;
 
           case P_CALL:
-               t = (unsigned) w->d_data;
+               t = (int) w->d_data;
                (* (void (*)(void)) t)();
                break;
 
           case P_VAR:
-               *--sp = (unsigned) w->d_data;
+               *--sp = (int) w->d_data;
                break;
 
           case P_CONST:
-               *--sp = * (unsigned *) w->d_data;
+               *--sp = * (int *) w->d_data;
                break;
 
           case P_GENTOK:
@@ -292,6 +296,8 @@ void run(def *m) {
 
 // Primitives as subroutines
 
+uchar *defbase = NULL;
+
 void p_dot(void) {
      printf(" %d", (int) *sp++);
 }
@@ -306,7 +312,7 @@ void p_find(void) {
      if (d == NULL)
           *--sp = 0;
      else {
-          *sp = (unsigned) ((uchar *) d - mem); 
+          *sp = (unsigned) tok(d);
           *--sp = 1;
      }
 }
@@ -369,13 +375,41 @@ void p_stack(void) {
 }
 
 void p_create(void) {
-     // [create] should preserve a partial definition is one is present.
-
-     // ( string -- newdef )
      char name[32];
-
      strcpy(name, (char *) sp[0]); // Save from scratch area
-     sp[0] = (unsigned) ((uchar *) find_create(name) - mem);
+     def *d = find(name);
+
+     if (d == NULL) {
+          if (defbase == NULL) 
+               d = create(name);
+          else {
+               printf("The Earth moved for me\n");
+
+               // Calculate required space
+               unsigned a = 
+                    ALIGN(defbase+sizeof(def)+strlen(name)+1, 4) - defbase;
+               unsigned b = dp - defbase;
+
+               printf("defbase = %u, a = %u, b = %u\n",
+                      (unsigned) defbase, a, b);
+
+               // Move partial code out of the way
+               memmove(defbase+a, defbase, b);
+
+               // Reset dp and create the definition
+               dp = defbase;
+               d = create(name);
+               printf("d = %u\n", (unsigned) d);
+               assert((uchar *) d == defbase);
+               assert(dp == defbase+a);
+
+               // Set dp after the moved code
+               defbase = defbase+a;
+               dp = defbase+b;
+          }
+     }
+
+     sp[0] = tok(d);
 }
 
 void p_defword(void) {
@@ -398,7 +432,6 @@ void p_immediate(void) {
 // Bootstrapping
 
 unsigned state = 0;
-uchar *base = NULL;
 
 void primitive(char *name, int token) {
      def *d = find_create(name);
@@ -506,7 +539,7 @@ void bootstrap(void) {
      defvar("sp", (uchar *) &sp);
      defvar("dp", (uchar *) &dp);
      defvar("rp", (uchar *) &rp);
-     defvar("base", (uchar *) &base);
+     defvar("base", (uchar *) &defbase);
      defvar("trace", (uchar *) &trace);
      defvar("dict", (uchar *) &dict);
      primitive("gentok", P_GENTOK);
@@ -562,8 +595,7 @@ void bootstrap(void) {
               W("immword"), W("branch"), 8,
               W("number"), W("branch0"), 3,
               W("litnum"), W("branch"), 2,
-              /* W("[create]"), W("gentok"), */
-              W("abort"), W("abort"),
+              W("[create]"), W("gentok"),
               EXIT);
 
      // : interp find if execute else number not if quit fi fi ;
@@ -584,10 +616,11 @@ void bootstrap(void) {
 }
 
 int main(void) {
+     // trace = 1;
      bootstrap();
      init();
      while (1) {
-          inp = (char *) mem;
+          inp = inbuf;
           if (fgets(inp, INBUF, stdin) == NULL) break;
           printf("> %s", inp);
           run(find("main"));
