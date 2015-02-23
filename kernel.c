@@ -17,7 +17,7 @@ typedef unsigned short ushort;
 
 uchar mem[MEMSIZE];
 
-#define ALIGN(p, n) ((uchar *) (((unsigned) (p)+(n)-1) & ~(n-1)))
+#define ALIGN(p, n) ((uchar *) (((unsigned) (p)+(n)-1) & ~((n)-1)))
 
 // At the bottom of mem is a buffer for the current input string
 char *inbuf = (char *) &mem[0];
@@ -39,21 +39,20 @@ typedef struct {
 
 #define IMMED 1
 
-#define def_name(d) ((char *) ((d)+1))
-
 // The d_execute field is either one of a fixed list of small integers,
 // or a pointer to something more exciting.
 
 enum { 
      P_UNKNOWN, P_ENTER, P_EXIT, P_GET, P_PUT, P_CHGET, P_CHPUT,
      P_TOKGET, P_TOKPUT,
-     P_ADD, P_SUB, P_MUL, P_DIV, P_MOD, P_EQ, P_LESS, P_DUP, P_POP, 
-     P_SWAP, P_ROT,
-     P_BRANCH0, P_BRANCH, P_LIT, P_EXECUTE, P_CALL, P_VAR, P_CONST, 
+     P_ADD, P_SUB, P_MUL, P_DIV, P_MOD, P_EQ, P_LESS, P_AND, P_INVERT,
+     P_LSL, P_LSR, P_ASR,
+     P_DUP, P_POP, P_SWAP, P_ROT,
+     P_BRANCH0, P_BRANCH, P_LIT, P_LIT2, P_EXECUTE, P_CALL, P_VAR, P_CONST, 
      P_GENTOK, P_IMMED
 };
 
-def *dict = NULL;
+unsigned dict = 0;
 uchar *dp = &mem[dbase];
 
 // At the top end of memory is the return stack, and below it, growing
@@ -70,33 +69,35 @@ uchar *dp = &mem[dbase];
 
 // create -- append dictionary entry
 def *create(char *name) {
-     short a = ALIGN(dp, 4) - mem;
-     def *p = (def *) &mem[a];
-     
-     dp = &mem[a + sizeof(def)];
+     def *p;
+
+     dp = ALIGN(dp, 4);
+     p = (def *) dp;
+     dp += sizeof(def);
      strcpy(dp, name);
      dp += strlen(name)+1;
      dp = ALIGN(dp, 2);
 
-     p->d_next = (dict != NULL ? (uchar *) dict - mem : 0);
+     p->d_next = dict;
      p->d_flags = 0;
      p->d_execute = P_UNKNOWN;
      p->d_data = NULL;
+     dict = (uchar *) p - mem;
 
-     dict = (def *) &mem[a];
      return p;
 }
 
-#define def_next(d) (d->d_next != 0 ? (def *) &mem[d->d_next] : NULL)
+#define def(d) ((def *) &mem[d])
+#define def_name(d) ((char *) ((d)+1))
 
 // find -- find dictionary entry
 def *find(char *name) {
-     def *d = dict;
+     unsigned d = dict;
 
-     while (d != NULL) {
-          if (strcmp(name, def_name(d)) == 0)
-               return d;
-          d = def_next(d);
+     while (d != 0) {
+          if (strcmp(name, def_name(def(d))) == 0)
+               return def(d);
+          d = def(d)->d_next;
      }
 
      return NULL;
@@ -107,18 +108,6 @@ def *find_create(char *name) {
      def *d = find(name);
      if (d != NULL) return d;
      return create(name);
-}
-
-// names -- print list of names 
-void names() {
-     def *d = dict;
-
-     while (d != NULL) {
-          printf(" %s", def_name(d));
-          d = def_next(d);
-     }
-
-     printf("\n");
 }
 
 
@@ -152,6 +141,11 @@ void run(def *m) {
           w = (def *) &mem[*ip++];
      reswitch:
           x = w->d_execute;
+
+          if ((uchar *) sp > &mem[sbase]) {
+               printf("Stack underflow!\n");
+               exit(2);
+          }
 
           if (trace) {
                printf("--");
@@ -198,6 +192,24 @@ void run(def *m) {
           case P_LESS:
                binary(<); break;
 
+          case P_AND:
+               binary(&); break;
+
+          case P_LSL:
+               binary(<<); break;
+
+          case P_LSR:
+               sp[1] = (unsigned) sp[1] >> sp[0]; sp++; break;
+
+          case P_ASR:
+               sp[1] = (int) sp[1] >> sp[0]; sp++; break;
+
+          case P_INVERT:
+               sp[0] = ~ sp[0]; break;
+
+               // GET and PUT are sensitive to evaluation order when
+               // the address accessed is an alias of sp.
+
           case P_GET:
                sp[0] = * (unsigned *) sp[0]; break;
 
@@ -241,8 +253,11 @@ void run(def *m) {
           case P_LIT:
                *--sp = (unsigned) (int) (signed short) *ip++; break;
 
+          case P_LIT2:
+               *--sp = (ip[1] << 16) + ip[0]; ip += 2; break;
+
           case P_EXECUTE:
-               w = (def *) *sp++;
+               w = (def *) &mem[*sp++];
                goto reswitch;
 
           case P_CALL:
@@ -264,7 +279,7 @@ void run(def *m) {
                break;
 
           case P_IMMED:
-               sp[0] = ((((def *) sp[0])->d_flags & IMMED) != 0);
+               sp[0] = ((((def *) &mem[sp[0]])->d_flags & IMMED) != 0);
                break;
 
           default:
@@ -291,7 +306,7 @@ void p_find(void) {
      if (d == NULL)
           *--sp = 0;
      else {
-          *sp = (unsigned) d; 
+          *sp = (unsigned) ((uchar *) d - mem); 
           *--sp = 1;
      }
 }
@@ -307,6 +322,7 @@ void p_scan(void) {
 
      while (*inp != '\0' && *inp != delim)
           *p++ = *inp++;
+     if (*inp != '\0') inp++;
      *p++ = '\0';
      
      sp[0] = (unsigned) base;
@@ -319,6 +335,7 @@ void p_word(void) {
      while (*inp != '\0' && isspace(*inp)) inp++;
      while (*inp != '\0' && !isspace(*inp))
           *p++ = *inp++;
+     if (*inp != '\0') inp++;
      *p++ = '\0';
      
      *--sp = (unsigned) base;
@@ -337,8 +354,8 @@ void p_number(void) {
      }
 }
 
-void p_puts(void) {
-     printf("%s\n", (char *) *sp++);
+void p_putc(void) {
+     putchar(*sp++);
 }
 
 void p_stack(void) {
@@ -358,20 +375,22 @@ void p_create(void) {
      char name[32];
 
      strcpy(name, (char *) sp[0]); // Save from scratch area
-     sp[0] = (unsigned) find_create(name);
+     sp[0] = (unsigned) ((uchar *) find_create(name) - mem);
 }
 
 void p_defword(void) {
-     def *d = (def *) sp[2];
+     def *d = (def *) &mem[sp[2]];
      unsigned action = sp[1];
      uchar *data = (uchar *) sp[0];
      d->d_execute = action;
      d->d_data = data;
      sp += 3;
+
+     printf("%s defined\n", def_name(d));
 }
 
 void p_immediate(void) {
-     def *d = (def *) sp[0];
+     def *d = (def *) &mem[sp[0]];
      d->d_flags |= IMMED;
 }
 
@@ -459,6 +478,8 @@ void bootstrap(void) {
      primitive("mod", P_MOD);
      primitive("=", P_EQ);
      primitive("<", P_LESS);
+     primitive("invert", P_INVERT);
+     primitive("&", P_AND);
      primitive("dup", P_DUP);
      primitive("pop", P_POP);
      primitive("swap", P_SWAP);
@@ -466,6 +487,10 @@ void bootstrap(void) {
      primitive("branch0", P_BRANCH0);
      primitive("branch", P_BRANCH);
      primitive("lit", P_LIT);
+     primitive("lsl", P_LSL);
+     primitive("lsr", P_LSR);
+     primitive("asr", P_ASR);
+     primitive("lit2", P_LIT2);
      primitive("exit", P_EXIT);
      prim_subr(".", p_dot);
      prim_subr("nl", p_nl);
@@ -475,16 +500,22 @@ void bootstrap(void) {
      prim_subr("find", p_find);
      primitive("execute", P_EXECUTE);
      prim_subr("number", p_number);
-     prim_subr("puts", p_puts);
+     prim_subr("putc", p_putc);
      prim_subr("stack", p_stack);
      defvar("state", (uchar *) &state);
+     defvar("sp", (uchar *) &sp);
      defvar("dp", (uchar *) &dp);
      defvar("rp", (uchar *) &rp);
      defvar("base", (uchar *) &base);
      defvar("trace", (uchar *) &trace);
+     defvar("dict", (uchar *) &dict);
      primitive("gentok", P_GENTOK);
      defconst("ENTER", P_ENTER);
+     defconst("EXIT", P_EXIT);
+     defconst("VAR", P_VAR);
+     defconst("CONST", P_CONST);
      defconst("MEM", (unsigned) mem);
+     defconst("SBASE", (unsigned) &mem[sbase]);
      prim_subr("[create]", p_create);
      primitive("immed?", P_IMMED);
      prim_subr("defword", p_defword);
@@ -492,50 +523,46 @@ void bootstrap(void) {
      prim_subr("immediate", p_immediate);
      immediate("immediate");
 
-     assemble("1-", L(1), W("-"), EXIT);
      assemble("not", L(0), W("="), EXIT);
-
-     assemble("fac", 
-              W("dup"), W("branch0"), 6,
-              W("dup"), W("1-"), W("fac"), W("*"), W("branch"), 3,
-              W("pop"), L(1),
-              EXIT);
-
-     // : genword MEM - gentok ;
-     assemble("genword", W("MEM"), W("-"), W("gentok"), EXIT);
 
      // : : 1 state ! word [create] dp @ base ! ;
      assemble(":",
               L(1), W("state"), W("!"), W("word"), W("[create]"),
               W("dp"), W("@"), W("base"), W("!"), EXIT);
 
-     // : ; immediate ['] exit gentok 0 state ! ENTER base @ defword 
+     // : ; immediate quote exit 0 state ! ENTER base @ defword 
      //    0 base !;
      assemble(";",
-              L(W("exit")), W("gentok"), L(0), W("state"), W("!"),
+              W("lit"), W("exit"), W("gentok"), 
+              L(0), W("state"), W("!"),
               W("ENTER"), W("base"), W("@"), W("defword"),
               L(0), W("base"), W("!"), EXIT);
      immediate(";");
 
      // litnum should use lit2 when needed
-     // : litnum ['] lit genword gentok ;
+     // : litnum dup dup 16 lsl 16 asr = if
+     //    quote lit gentok else quote lit2 dup gentok 16 lsr gentok fi ;
      assemble("litnum", 
-              L(W("lit")), W("gentok"), W("gentok"), EXIT);
+              W("dup"), W("dup"), L(16), W("lsl"), L(16), W("asr"),
+              W("="), W("branch0"), 6,
+              W("lit"), W("lit"), W("gentok"), W("gentok"), W("branch"), 9,
+              W("lit"), W("lit2"), W("gentok"), W("dup"), W("gentok"),
+              L(16), W("lsr"), W("gentok"), EXIT);
 
-     // : immword dup immed? if execute else genword fi ;
+     // : immword dup immed? if execute else gentok fi ;
      assemble("immword",
               W("dup"), W("immed?"), W("branch0"), 3,
               W("execute"), W("branch"), 1,
-              W("genword"), EXIT);
+              W("gentok"), EXIT);
 
      // : compile find if immword else number if litnum
-     //    else [create] genword fi fi ;
+     //    else [create] gentok fi fi ;
      assemble("compile",
               W("find"), W("branch0"), 3,
               W("immword"), W("branch"), 8,
               W("number"), W("branch0"), 3,
               W("litnum"), W("branch"), 2,
-              /* W("[create]"), W("genword"), */
+              /* W("[create]"), W("gentok"), */
               W("abort"), W("abort"),
               EXIT);
 
@@ -554,23 +581,15 @@ void bootstrap(void) {
               W("compile"), W("branch"), -12, 
               W("interp"), W("branch"), -15,
               W("pop"), EXIT);
-     
-     // : ['] immediate ['] lit gentok word [create] genword ;
-     assemble("[']", 
-              L(W("lit")), W("gentok"), 
-              W("word"), W("[create]"), W("genword"), EXIT);
-     immediate("[']");
 }
 
 int main(void) {
-     // trace = 1;
      bootstrap();
      init();
-     names();
      while (1) {
           inp = (char *) mem;
           if (fgets(inp, INBUF, stdin) == NULL) break;
-          fputs(inp, stdout);
+          printf("> %s", inp);
           run(find("main"));
      }
      return 0;
