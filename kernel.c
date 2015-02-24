@@ -1,3 +1,6 @@
+/* Define DUMP to be able to assemble a ROM, or BOOT to boot from
+   a ROM image, or neither for an empty interpreter */
+
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -14,8 +17,7 @@ char inbuf[INBUF];
 // The dictionary must go in mem so that definitions can be accessed
 // using two-byte indices; there's no real reason for the other stuff
 // to be in there, except to allow the value stack and the dictionary
-// to grow towards each other.  Beware, however that there must not be
-// a definition at index 0; we could change that assumption.
+// to grow towards each other.
 
 #define MEMSIZE 32768
 
@@ -63,7 +65,7 @@ unsigned state = 0;
 uchar *dp = mem;
 uchar *rstack[RSTACK];
 
-#ifdef BOOTSTRAP
+#ifdef DUMP
 uchar tmem[MEMSIZE];
 uchar *tp = tmem;
 #else
@@ -121,7 +123,7 @@ unsigned *rp;
 char *inp;
 int trace = 0;
 
-void dump(void) {
+void show_stack(void) {
      int *p;
 
      for (p = sp; p < (int *) &mem[MEMSIZE]; p++)
@@ -153,7 +155,7 @@ quit:
 
           if (trace) {
                printf("--");
-               dump();
+               show_stack();
                printf(" : %s\n", def_name(w));
           }
 
@@ -395,7 +397,7 @@ void p_create(void) {
      char name[32];
      strcpy(name, (char *) sp[0]); // Save from scratch area
 
-#ifdef BOOTSTRAP
+#ifdef DUMP
      def *d = find_create(name);
 #else
      def *d = find(name);
@@ -457,17 +459,22 @@ void p_accept(void) {
      printf("> "); fflush(stdout);
      if (fgets(inbuf, INBUF, stdin) == NULL)
           longjmp(finish, 1);
+#ifdef DUMP
      printf("%s", inbuf);
+#endif
      inp = inbuf;
 }
 
 
 // Bootstrapping
 
-#ifndef BOOTSTRAP
+#ifdef BOOT
+
 #define sym(x) (int) x
 #include "boot.c"
+
 #else
+
 #define MAXSYM 100
 uchar *addrs[MAXSYM];
 char *syms[MAXSYM];
@@ -549,7 +556,7 @@ void immediate(char *name) {
      d->d_flags |= IMMED;
 }
 
-void bootstrap(void) {
+void init_dict(void) {
      primitive("@", P_GET);
      primitive("!", P_PUT);
      primitive("ch@", P_CHGET);
@@ -682,7 +689,7 @@ void bootstrap(void) {
 
 // DUMP
 
-#ifdef BOOTSTRAP
+#ifdef DUMP
 #define MAXDEFS 200
 
 def *defs[MAXDEFS];
@@ -702,8 +709,8 @@ void dump_mem(void) {
      int n = ndefs-1;
      int k = 0;
 
-     printf("#define BOOT %d\n\n", (dp - mem)/4);
-     printf("unsigned boot[BOOT] = {\n");
+     printf("#define BOOTMEM %d\n\n", (dp - mem)/4);
+     printf("unsigned boot[BOOTMEM] = {\n");
 
      while (p < dp) {
           printf("/* %4d */ ", p - mem);
@@ -752,7 +759,7 @@ void dump_rom(void) {
      printf("};\n\n");
 }
 
-void dumpit(void) {
+void dump(void) {
      int i;
 
      printf("// --boot\n");
@@ -764,12 +771,12 @@ void dumpit(void) {
 #endif
 
 int main(void) {
-#ifdef BOOTSTRAP
-     bootstrap();
-#else
-     memcpy(mem, boot, BOOT * sizeof(unsigned));
-     dp = &mem[BOOT * sizeof(unsigned)];
+#ifdef BOOT
+     dp = &mem[BOOTMEM * sizeof(unsigned)];
+     memcpy(mem, boot, dp - mem);
      dict = DICT;
+#else
+     init_dict();
 #endif
 
      if (! setjmp(finish))
@@ -777,8 +784,8 @@ int main(void) {
 
      printf("\nBye\n");
 
-#ifdef BOOTSTRAP
-     dumpit();
+#ifdef DUMP
+     dump();
 #endif
 
      return 0;

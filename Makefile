@@ -4,7 +4,7 @@ CC = gcc
 CFLAGS = -O2 -fno-strict-aliasing
 
 ninth: kernel.c boot.c
-	$(CC) $(CFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) -DBOOT -o $@ $<
 
 boot.c: ninthboot system.nth
 	ninthboot <system.nth | tee tmpa
@@ -12,4 +12,4 @@ boot.c: ninthboot system.nth
 	[ ! -z $@ ]
 
 ninthboot: kernel.c
-	$(CC) $(CFLAGS) -DBOOTSTRAP -o $@ $<
+	$(CC) $(CFLAGS) -DDUMP -o $@ $<
