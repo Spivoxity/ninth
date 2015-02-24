@@ -48,27 +48,27 @@ typedef struct {
 
 enum { 
      P_UNKNOWN, P_ENTER, P_EXIT, P_GET, P_PUT, P_CHGET, P_CHPUT,
-     P_TOKGET, P_TOKPUT,
-     P_ADD, P_SUB, P_MUL, P_DIV, P_MOD, P_EQ, P_LESS, P_AND, P_INVERT,
-     P_LSL, P_LSR, P_ASR,
-     P_DUP, P_POP, P_SWAP, P_ROT,
+     P_TOKGET, P_TOKPUT, P_QUIT,
+     P_ADD, P_SUB, P_MUL, P_DIV, P_MOD, P_EQ, P_LESS,
+     P_LSL, P_LSR, P_ASR, P_AND, P_OR, P_XOR,
+     P_DUP, P_POP, P_SWAP, P_ROT, P_PICK, P_DEPTH,
      P_BRANCH0, P_BRANCH, P_LIT, P_LIT2, P_EXECUTE, P_CALL, P_VAR, P_CONST, 
-     P_GENTOK, P_IMMED
+     P_GENTOK, P_IMMED, P_NOP
 };
 
+#define RSTACK 1024
+
 int dict = -1;
+unsigned state = 0;
+uchar *dp = mem;
+uchar *rstack[RSTACK];
 
-uchar *dp = &mem[dbase];
-
-// At the top end of memory is the return stack, and below it, growing
-// towards the dictionary, is the eval stack.  The return stack has
-// four-byte entries.
-
-#define sbase MEMSIZE
-
-#define RSTACK 256
-#define rbase (RSTACK * sizeof(unsigned))
-uchar *rstack[rbase];
+#ifdef BOOTSTRAP
+uchar tmem[MEMSIZE];
+uchar *tp = tmem;
+#else
+#define tp dp
+#endif
 
 
 // Primitives
@@ -121,15 +121,10 @@ unsigned *rp;
 char *inp;
 int trace = 0;
 
-void init(void) {
-     sp = (int *) &mem[sbase]; 
-     rp = (unsigned *) &rstack[rbase];
-}
-
 void dump(void) {
      int *p;
 
-     for (p = sp; p < (int *) &mem[sbase]; p++)
+     for (p = sp; p < (int *) &mem[MEMSIZE]; p++)
           printf(" %d", *p);
 }
 
@@ -139,16 +134,21 @@ void run(def *m) {
      int t;
      unsigned x;
 
+quit:
+     printf("NINTH\n");
+     sp = (int *) &mem[MEMSIZE]; 
+     rp = (unsigned *) &rstack[RSTACK];
      ip = (ushort *) m->d_data;
+     state = 0;
 
      while (1) {
           w = (def *) &mem[*ip++];
      reswitch:
           x = w->d_execute;
 
-          if ((uchar *) sp > &mem[sbase]) {
-               printf("Stack underflow!\n");
-               exit(2);
+          if ((uchar *) sp > &mem[MEMSIZE]) {
+               printf("\nStack underflow!\n");
+               goto quit;
           }
 
           if (trace) {
@@ -158,9 +158,16 @@ void run(def *m) {
           }
 
           switch (x) {
+          case P_NOP:
+               break;
+
+          case P_QUIT:
+               goto quit;
+               break;
+
           case P_UNKNOWN:
                printf("%s is unknown\n", def_name(w));
-               exit(1);
+               goto quit;
                break;
 
           case P_ENTER:
@@ -169,7 +176,7 @@ void run(def *m) {
                break;
 
           case P_EXIT:
-               if (rp >= (unsigned *) &rstack[rbase]) return;
+               if (rp >= (unsigned *) &rstack[RSTACK]) return;
                ip = (ushort *) *rp++;
                break;
 
@@ -208,8 +215,11 @@ void run(def *m) {
           case P_ASR:
                sp[1] = (int) sp[1] >> sp[0]; sp++; break;
 
-          case P_INVERT:
-               sp[0] = ~ sp[0]; break;
+          case P_OR:
+               binary(|); break;
+
+          case P_XOR:
+               binary(^); break;
 
                // GET and PUT are sensitive to evaluation order when
                // the address accessed is an alias of sp.
@@ -234,6 +244,13 @@ void run(def *m) {
 
           case P_DUP:
                sp--; sp[0] = sp[1]; break;
+
+          case P_PICK:
+               sp[0] = sp[sp[0]+1]; break;
+
+          case P_DEPTH:
+               t = (int *) &mem[MEMSIZE] - sp; *--sp = t;
+               break;
 
           case P_POP:
                sp++; break;
@@ -278,8 +295,8 @@ void run(def *m) {
                break;
 
           case P_GENTOK:
-               * (short *) dp = *sp++;
-               dp += sizeof(short);
+               * (short *) tp = *sp++;
+               tp += sizeof(short);
                break;
 
           case P_IMMED:
@@ -288,7 +305,7 @@ void run(def *m) {
 
           default:
                printf("Unknown action\n");
-               exit(1);
+               goto quit;
           }
      }
 }
@@ -322,8 +339,8 @@ void p_bl(void) {
 }     
 
 void p_scan(void) {
-     char delim = sp[0];
-     char *base = (char *) dp;
+     char *base = (char *) sp[0];
+     char delim = sp[1];
      char *p = base;
 
      while (*inp != '\0' && *inp != delim)
@@ -331,7 +348,7 @@ void p_scan(void) {
      if (*inp != '\0') inp++;
      *p++ = '\0';
      
-     sp[0] = (unsigned) base;
+     sp[1] = (unsigned) base; sp++;
 }     
 
 void p_word(void) {
@@ -367,7 +384,7 @@ void p_putc(void) {
 void p_stack(void) {
      int *p;
 
-     for (p = (int *) sp; p < (int *) &mem[sbase]; p++) {
+     for (p = (int *) sp; p < (int *) &mem[MEMSIZE]; p++) {
           printf(" %d", *p);
      }
 
@@ -377,6 +394,10 @@ void p_stack(void) {
 void p_create(void) {
      char name[32];
      strcpy(name, (char *) sp[0]); // Save from scratch area
+
+#ifdef BOOTSTRAP
+     def *d = find_create(name);
+#else
      def *d = find(name);
 
      if (d == NULL) {
@@ -408,7 +429,7 @@ void p_create(void) {
                dp = defbase+b;
           }
      }
-
+#endif
      sp[0] = tok(d);
 }
 
@@ -428,27 +449,58 @@ void p_immediate(void) {
      d->d_flags |= IMMED;
 }
 
+#include <setjmp.h>
+
+jmp_buf finish;
+
+void p_accept(void) {
+     printf("> "); fflush(stdout);
+     if (fgets(inbuf, INBUF, stdin) == NULL)
+          longjmp(finish, 1);
+     printf("%s", inbuf);
+     inp = inbuf;
+}
+
 
 // Bootstrapping
 
-unsigned state = 0;
+#ifndef BOOTSTRAP
+#define sym(x) (int) x
+#include "boot.c"
+#else
+#define MAXSYM 100
+uchar *addrs[MAXSYM];
+char *syms[MAXSYM];
+int nsyms = 0;
+
+void defsym(uchar *addr, char *sym) {
+     addrs[nsyms] = addr;
+     syms[nsyms] = sym;
+     nsyms++;
+}
 
 void primitive(char *name, int token) {
      def *d = find_create(name);
      d->d_execute = token;
 }
 
-void prim_subr(char *name, void (*subr)(void)) {
+void _prim_subr(char *name, void (*subr)(void), char *sym) {
      def *d = find_create(name);
      d->d_execute = P_CALL;
      d->d_data = (uchar *) subr;
+     defsym((uchar *) subr, sym);
 }
 
-void defvar(char *name, uchar *addr) {
+#define prim_subr(name, subr) _prim_subr(name, subr, #subr)
+
+void _defvar(char *name, uchar *addr, char *sym) {
      def *d = find_create(name);
      d->d_execute = P_VAR;
      d->d_data = addr;
+     defsym(addr, sym);
 }
+
+#define defvar(name, addr) _defvar(name, (uchar *) addr, #addr)
 
 void defconst(char *name, unsigned val) {
      def *d = find_create(name);
@@ -473,7 +525,7 @@ ushort W(char *name) {
 
 void assemble(char *name, ...) {
      def *d = find_create(name);
-     uchar *base = dp;
+     uchar *base = tp;
      unsigned tok;
      va_list va;
 
@@ -481,11 +533,11 @@ void assemble(char *name, ...) {
      while (1) {
           tok = va_arg(va, unsigned);
           if (tok == EXIT) break;
-          * (ushort *) dp = tok;
-          dp += sizeof(ushort);
+          * (ushort *) tp = tok;
+          tp += sizeof(ushort);
      } 
-     * (ushort *) dp = W("exit");
-     dp += sizeof(ushort);
+     * (ushort *) tp = W("exit");
+     tp += sizeof(ushort);
      va_end(va);
 
      d->d_execute = P_ENTER;
@@ -511,9 +563,12 @@ void bootstrap(void) {
      primitive("mod", P_MOD);
      primitive("=", P_EQ);
      primitive("<", P_LESS);
-     primitive("invert", P_INVERT);
-     primitive("&", P_AND);
+     primitive("and", P_AND);
+     primitive("or", P_OR);
+     primitive("xor", P_XOR);
      primitive("dup", P_DUP);
+     primitive("pick", P_PICK);
+     primitive("depth", P_DEPTH);
      primitive("pop", P_POP);
      primitive("swap", P_SWAP);
      primitive("rot", P_ROT);
@@ -535,38 +590,42 @@ void bootstrap(void) {
      prim_subr("number", p_number);
      prim_subr("putc", p_putc);
      prim_subr("stack", p_stack);
-     defvar("state", (uchar *) &state);
-     defvar("sp", (uchar *) &sp);
-     defvar("dp", (uchar *) &dp);
-     defvar("rp", (uchar *) &rp);
-     defvar("base", (uchar *) &defbase);
-     defvar("trace", (uchar *) &trace);
-     defvar("dict", (uchar *) &dict);
+     defvar("state", &state);
+     defvar("dp", &dp);
+     defvar("tp", &tp);
+     defvar("rp", &rp);
+     defvar("base", &defbase);
+     defvar("trace", &trace);
+     defvar("dict", &dict);
      primitive("gentok", P_GENTOK);
      defconst("ENTER", P_ENTER);
      defconst("EXIT", P_EXIT);
      defconst("VAR", P_VAR);
      defconst("CONST", P_CONST);
-     defconst("MEM", (unsigned) mem);
-     defconst("SBASE", (unsigned) &mem[sbase]);
+     defvar("MEM", mem);
      prim_subr("[create]", p_create);
      primitive("immed?", P_IMMED);
      prim_subr("defword", p_defword);
-     defvar("inp", (uchar *) inp);
      prim_subr("immediate", p_immediate);
      immediate("immediate");
+     primitive("?comp", P_NOP);
+     primitive("?interp", P_NOP);
+     prim_subr("accept", p_accept);
+     primitive("quit", P_QUIT);
 
      assemble("not", L(0), W("="), EXIT);
 
-     // : : 1 state ! word [create] dp @ base ! ;
+     // : : immediate ?interp 1 state ! word [create] tp @ base ! ;
      assemble(":",
-              L(1), W("state"), W("!"), W("word"), W("[create]"),
-              W("dp"), W("@"), W("base"), W("!"), EXIT);
+              W("?interp"), L(1), W("state"), W("!"), 
+              W("word"), W("[create]"), 
+              W("tp"), W("@"), W("base"), W("!"), EXIT);
+     immediate(":");
 
-     // : ; immediate quote exit 0 state ! ENTER base @ defword 
+     // : ; immediate ?comp quote exit 0 state ! ENTER base @ defword 
      //    0 base !;
      assemble(";",
-              W("lit"), W("exit"), W("gentok"), 
+              W("?comp"), W("lit"), W("exit"), W("gentok"), 
               L(0), W("state"), W("!"),
               W("ENTER"), W("base"), W("@"), W("defword"),
               L(0), W("base"), W("!"), EXIT);
@@ -603,27 +662,124 @@ void bootstrap(void) {
               W("find"), W("branch0"), 3,
               W("execute"), W("branch"), 5,
               W("number"), W("not"), W("branch0"), 1,
-              W("quit"), EXIT);
+              W("unknown"), EXIT);
 
-     // : main do word dup ch@ while 
+     // : repl do word dup ch@ while 
      //    state @ if compile else interp fi fi od pop
-     assemble("main", 
+     assemble("repl", 
               W("word"), W("dup"), W("ch@"), W("branch0"), 10,
               W("state"), W("@"), W("branch0"), 3,
               W("compile"), W("branch"), -12, 
               W("interp"), W("branch"), -15,
               W("pop"), EXIT);
+
+     // : main do accept repl od
+     assemble("main",
+              W("accept"), W("repl"), W("branch"), -4, EXIT);
+}
+#endif
+
+
+// DUMP
+
+#ifdef BOOTSTRAP
+#define MAXDEFS 200
+
+def *defs[MAXDEFS];
+int ndefs = 0;
+
+void map_defs(void) {
+     int d = dict;
+
+     while (d >= 0) {
+          defs[ndefs++] = def(d);
+          d = def(d)->d_next;
+     }
 }
 
-int main(void) {
-     // trace = 1;
-     bootstrap();
-     init();
-     while (1) {
-          inp = inbuf;
-          if (fgets(inp, INBUF, stdin) == NULL) break;
-          printf("> %s", inp);
-          run(find("main"));
+void dump_mem(void) {
+     uchar *p = mem;
+     int n = ndefs-1;
+     int k = 0;
+
+     printf("#define BOOT %d\n\n", (dp - mem)/4);
+     printf("unsigned boot[BOOT] = {\n");
+
+     while (p < dp) {
+          printf("/* %4d */ ", p - mem);
+
+          if (n >= 0 && p == (uchar *) defs[n]) {
+               def *d = (def *) p;
+               printf("%d, %d, ", 
+                      (d->d_next & 0xffff) + (d->d_flags << 16), 
+                      d->d_execute);
+
+               if (k < nsyms && d->d_data == addrs[k])
+                    printf("sym(%s),", syms[k++]);
+               else if (d->d_data >= mem && d->d_data < dp)
+                    printf("sym(&mem[%d]),", d->d_data - mem);
+               else if (d->d_data >= tmem && d->d_data < tp)
+                    printf("sym(&rom[%d]),", (d->d_data - tmem)/2);
+               else
+                    printf("%d,", (int) d->d_data);
+
+               printf(" /* %s */\n", def_name(d));
+               p += sizeof(def); n--;
+          }
+          else {
+               printf("%u,\n", * (unsigned *) p);
+               p += sizeof(unsigned);
+          }
      }
+
+     printf("};\n\n");
+}
+
+void dump_rom(void) {
+     short *p = (short *) tmem;
+
+     printf("#define ROM %d\n\n", (tp - tmem)/2);
+     printf("short rom[ROM] = {\n");
+
+     while (p < (short *) tp) {
+          int n = 0;
+          printf("/* %4d */", p - (short *) tmem); 
+          while (n++ < 8 && p < (short *) tp)
+               printf(" %d,", *p++);
+          printf("\n");
+     }
+
+     printf("};\n\n");
+}
+
+void dumpit(void) {
+     int i;
+
+     printf("// --boot\n");
+     map_defs();
+     dump_rom();
+     dump_mem();
+     printf("#define DICT %d\n", dict);
+}
+#endif
+
+int main(void) {
+#ifdef BOOTSTRAP
+     bootstrap();
+#else
+     memcpy(mem, boot, BOOT * sizeof(unsigned));
+     dp = &mem[BOOT * sizeof(unsigned)];
+     dict = DICT;
+#endif
+
+     if (! setjmp(finish))
+          run(find("main"));
+
+     printf("\nBye\n");
+
+#ifdef BOOTSTRAP
+     dumpit();
+#endif
+
      return 0;
 }

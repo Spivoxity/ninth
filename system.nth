@@ -1,25 +1,29 @@
-: # immediate 10 scan pop ;
+: # immediate 10 dp @ scan pop ;
 # Now we can write comments like this
 
 # Stack manipulations
 : -rot rot rot ;
-: over swap dup rot swap ;
+: over 1 pick ;
+: 2pop pop pop ;
+: 2dup over over ;
 : nip swap pop ;
 : tuck dup rot rot ;
 
 # Abbreviations
+: invert -1 xor ;
 : 1+ 1 + ;
 : 1- 1 - ;
 : 2/ 1 asr ;
 : cell+ 4 + ;
 : cell- 4 - ;
 : space 32 putc ;
-: aligned 1- tuck + swap invert & ;
+: aligned 1- tuck + swap invert and ;
 : on 1 swap ! ;
 : off 0 swap ! ;
 : > swap < ;
 : <= > not ;
 : >= < not ;
+: <> = not ;
 
 : xchg # Exchange between stack and memory
 dup @ -rot ! ;
@@ -30,49 +34,53 @@ dup @ -rot ! ;
 
 # Quotations
 : ' word [create] ;
-: ['] immediate ' lit lit gentok gentok ;
+: ['] immediate lit lit gentok ' gentok ;
 : [compile] immediate ' gentok ;
 : quote immediate lit lit gentok ' gentok lit gentok gentok ;
 
 # Control structures
-: here dp @ ;
+: there tp @ ;
 
-: >mark here 0 gentok ;
-: >resolve here over - 2/ 1- swap tok! ;
+: >mark there 0 gentok ;
+: >resolve there over - 2/ 1- swap tok! ;
 
-: <mark here ;
-: <resolve here - 2/ 1- gentok ;
+: <mark there ;
+: <resolve there - 2/ 1- gentok ;
 
 : if immediate quote branch0 >mark ;
 : else immediate quote branch >mark swap >resolve ;
 : fi immediate >resolve ;
 
+: ?dup dup if dup fi ;
+
 : do immediate <mark 0 ;
 : while immediate pop quote branch0 >mark ;
-: od immediate swap quote branch <resolve dup if >resolve else pop fi ;
+: od immediate swap quote branch <resolve ?dup if >resolve fi ;
+
+: dump depth do ?dup while dup pick . 1- od nl ;
+: clear do depth while pop od ;
 
 # Storage allocation
+: here dp @ ;
 : , here dup cell+ dp ! ! ;
 : constant word [create] CONST here defword , ;
 : variable word [create] VAR here defword ;
 : allot here + dp ! ;
 
-: dump sp @ cell+ do dup SBASE < while dup @ . cell+ od pop ;
-: clear SBASE 8 - sp ! ;
-
 # Strings
 : char word ch@ ;
-: [char] immediate quote lit word ch@ gentok ;
-: strlen 0 swap do dup ch@ while swap 1+ swap 1+ od pop ;
-: putstr do dup ch@ dup while putc 1+ od pop pop ;
+: [char] immediate quote lit char gentok ;
+: strlen dup do dup ch@ while 1+ od swap - ;
+: putstr do dup ch@ dup while putc 1+ od 2pop ;
 : litstr r> dup 2 + swap tok@ over + >r ;
 
 : " immediate
-quote litstr 0 gentok [char] " scan 
+quote litstr 0 gentok [char] " there scan 
 strlen 1+ 2 aligned
-dup here 2 - tok! here + dp ! ;
+dup there 2 - tok! there + tp ! ;
 
 : ." immediate [compile] " quote putstr ;
+
 
 # Dictionary layout
 : def>next MEM + tok@ ;
@@ -83,25 +91,19 @@ dup here 2 - tok! here + dp ! ;
 : names 
 dict @ do dup 0 >= while dup space def>name putstr def>next od pop nl ;
 
+
 # Disassembler
 : isword # Test if token is in the dictionary
-dict @ 
-do dup 0 < if pop pop 0 0 
-  else over over = if pop pop 1 0 else 1 fi fi 
-while def>next od ;
+dict @ do dup 0 >= while 2dup = if 2pop 1 exit fi def>next od 2pop 0 ;
+
+: disword dup isword if space def>name putstr else . fi ;
+
+: disbody do dup tok@ dup disword ['] exit <> while 2 + od nl pop ;
 
 : dis # Disassemble up to exit token
 word find if
   dup def>exec ENTER = if
-    def>data 
-    do dup tok@
-      dup isword if 
-        dup space def>name putstr 
-        def>exec EXIT = not
-      else
-        . 1
-      fi
-    while 2 + od nl pop
+    def>data disbody
   else
     def>name putstr space ." is not a secondary" nl
   fi
@@ -110,29 +112,16 @@ else
 fi ;
 
 
+# Top level support
 
+: unknown # Unknown word in outer interpreter
+putstr space ." is undefined" nl quit ;
 
-dump
+: ?comp # Called from compile-only words
+state @ not if ." Not compiling" nl quit fi ;
 
-
-: fac dup if dup 1- fac * else pop 1 fi ;
-
-10 fac . nl # 3628800
-
-: faciter 1 swap do dup while tuck * swap 1- od pop ;
-
-9 faciter . nl # 362880
-
-: f dup g . nl ;
-
-: g * ;
-
-5 f
-
-dump
-
-dis faciter
-
-dump
+: ?interp # Called at start of :
+state @ if ." Already compiling" nl 
+  base @ if base @ dp ! fi quit fi ;
 
 names
