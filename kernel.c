@@ -11,7 +11,8 @@ typedef unsigned char uchar;
 typedef unsigned short ushort;
 
 #define INBUF 256
-char inbuf[INBUF];
+#define MEMSIZE 32768
+#define RSTACK 1024
 
 // The RAM of the machine is represented by the mem array
 // The dictionary must go in mem so that definitions can be accessed
@@ -19,9 +20,9 @@ char inbuf[INBUF];
 // to be in there, except to allow the value stack and the dictionary
 // to grow towards each other.
 
-#define MEMSIZE 32768
-
 uchar mem[MEMSIZE];
+uchar *rstack[RSTACK];
+char inbuf[INBUF];
 
 #define ALIGN(p, n) ((uchar *) (((unsigned) (p)+(n)-1) & ~((n)-1)))
 
@@ -48,22 +49,10 @@ typedef struct {
 // The d_execute field is either one of a fixed list of small integers,
 // or a pointer to something more exciting.
 
-enum { 
-     P_UNKNOWN, P_ENTER, P_EXIT, P_GET, P_PUT, P_CHGET, P_CHPUT,
-     P_TOKGET, P_TOKPUT, P_QUIT,
-     P_ADD, P_SUB, P_MUL, P_DIV, P_MOD, P_EQ, P_LESS,
-     P_LSL, P_LSR, P_ASR, P_AND, P_OR, P_XOR,
-     P_DUP, P_POP, P_SWAP, P_ROT, P_PICK, P_DEPTH,
-     P_BRANCH0, P_BRANCH, P_LIT, P_LIT2, P_EXECUTE, P_CALL, P_VAR, P_CONST, 
-     P_GENTOK, P_IMMED, P_NOP
-};
-
-#define RSTACK 1024
-
 int dict = -1;
 unsigned state = 0;
+uchar *defbase = NULL;
 uchar *dp = mem;
-uchar *rstack[RSTACK];
 
 #ifdef DUMP
 uchar tmem[MEMSIZE];
@@ -74,6 +63,72 @@ uchar *tp = tmem;
 
 
 // Primitives
+
+#define binary(s, p, w) prim(s, p, sp[1] = sp[1] w sp[0]; sp++;)
+#define get(s, p, t) prim(s, p, sp[0] = * (t *) sp[0];)
+#define put(s, p, t) prim(s, p, * (t *) sp[0] = sp[1]; sp += 2;)
+
+#define PRIMS \
+     prim0(P_NOP, ;) \
+     prim("quit", P_QUIT, goto quit;) \
+     prim0(P_UNKNOWN, \
+           printf("%s is unknown\n", def_name(w)); goto quit;) \
+     prim0(P_ENTER, \
+           *--rp = (unsigned) ip; \
+           ip = (ushort *) w->d_data;) \
+     prim("exit", P_EXIT, \
+          if (rp >= (unsigned *) &rstack[RSTACK]) return; \
+          ip = (ushort *) *rp++;) \
+     binary("+", P_ADD, +) \
+     binary("-", P_SUB, -) \
+     binary("*", P_MUL, *) \
+     binary("/", P_DIV, /) \
+     binary("mod", P_MOD, %) \
+     binary("=", P_EQ, ==) \
+     binary("<", P_LESS, <) \
+     binary("and", P_AND, &) \
+     binary("lsl", P_LSL, <<) \
+     prim("lsr", P_LSR, sp[1] = (unsigned) sp[1] >> sp[0]; sp++;) \
+     binary("asr", P_ASR, >>) \
+     binary("or", P_OR, |) \
+     binary("xor", P_XOR, ^) \
+     get("@", P_GET, int) \
+     put("!", P_PUT, int) \
+     get("ch@", P_CHGET, char) \
+     put("ch!", P_CHPUT, char) \
+     get("tok@", P_TOKGET, short) \
+     put("tok!", P_TOKPUT, short) \
+     prim("dup", P_DUP, sp--; sp[0] = sp[1];) \
+     prim("pick", P_PICK, sp[0] = sp[sp[0]+1];) \
+     prim("depth", P_DEPTH, t = (int *) &mem[MEMSIZE] - sp; *--sp = t;) \
+     prim("pop", P_POP, sp++;) \
+     prim("swap", P_SWAP, t = sp[0]; sp[0] = sp[1]; sp[1] = t;) \
+     prim("rot", P_ROT, t = sp[2]; sp[2] = sp[1]; sp[1] = sp[0]; sp[0] = t;) \
+     prim("r>", P_RPOP, *--sp = *rp++;) \
+     prim(">r", P_RPUSH, *--rp = *sp++;) \
+     prim("r@", P_RAT, *--sp = *rp;) \
+     prim("branch0", P_BRANCH0, t = (short) *ip++; if (*sp++ == 0) ip += t;) \
+     prim("branch", P_BRANCH, t = (short) *ip++; ip += t;) \
+     prim("lit", P_LIT, *--sp = (signed short) *ip++;) \
+     prim("lit2", P_LIT2, *--sp = (ip[1] << 16) + ip[0]; ip += 2;) \
+     prim("execute", P_EXECUTE, w = (def *) &mem[*sp++]; goto reswitch;) \
+     prim0(P_CALL, (* (void (*)(void)) w->d_data)();) \
+     prim0(P_VAR, *--sp = (int) w->d_data;) \
+     prim0(P_CONST, *--sp = * (int *) w->d_data;) \
+     prim("gentok", P_GENTOK, * (short *) tp = *sp++; tp += sizeof(short);) \
+     prim("immed?", P_IMMED, \
+          sp[0] = ((((def *) &mem[sp[0]])->d_flags & IMMED) != 0);)
+
+#define prim(s, p, a) prim0(p, a)
+
+enum { 
+#undef prim0
+#define prim0(p, a) p,
+PRIMS
+};
+
+
+// Dictionary
 
 // create -- append dictionary entry
 def *create(char *name) {
@@ -142,6 +197,7 @@ quit:
      rp = (unsigned *) &rstack[RSTACK];
      ip = (ushort *) m->d_data;
      state = 0;
+     defbase = NULL;
 
      while (1) {
           w = (def *) &mem[*ip++];
@@ -160,150 +216,9 @@ quit:
           }
 
           switch (x) {
-          case P_NOP:
-               break;
-
-          case P_QUIT:
-               goto quit;
-               break;
-
-          case P_UNKNOWN:
-               printf("%s is unknown\n", def_name(w));
-               goto quit;
-               break;
-
-          case P_ENTER:
-               *--rp = (unsigned) ip;
-               ip = (ushort *) w->d_data;
-               break;
-
-          case P_EXIT:
-               if (rp >= (unsigned *) &rstack[RSTACK]) return;
-               ip = (ushort *) *rp++;
-               break;
-
-#define binary(w) sp[1] = sp[1] w sp[0]; sp++; break;
-
-          case P_ADD:
-               binary(+); break;
-
-          case P_SUB:
-               binary(-); break;
-               
-          case P_MUL:
-               binary(*); break;
-
-          case P_DIV:
-               binary(/); break;
-
-          case P_MOD:
-               binary(%); break;
-
-          case P_EQ:
-               binary(==); break;
-
-          case P_LESS:
-               binary(<); break;
-
-          case P_AND:
-               binary(&); break;
-
-          case P_LSL:
-               binary(<<); break;
-
-          case P_LSR:
-               sp[1] = (unsigned) sp[1] >> sp[0]; sp++; break;
-
-          case P_ASR:
-               sp[1] = (int) sp[1] >> sp[0]; sp++; break;
-
-          case P_OR:
-               binary(|); break;
-
-          case P_XOR:
-               binary(^); break;
-
-               // GET and PUT are sensitive to evaluation order when
-               // the address accessed is an alias of sp.
-
-          case P_GET:
-               sp[0] = * (int *) sp[0]; break;
-
-          case P_PUT:
-               * (int *) sp[0] = sp[1]; sp += 2; break;
-
-          case P_CHGET:
-               sp[0] = * (char *) sp[0]; break;
-
-          case P_CHPUT:
-               * (char *) sp[0] = sp[1]; sp += 2; break;
-
-          case P_TOKGET:
-               sp[0] = * (short *) sp[0]; break;
-
-          case P_TOKPUT:
-               * (short *) sp[0] = sp[1]; sp += 2; break;
-
-          case P_DUP:
-               sp--; sp[0] = sp[1]; break;
-
-          case P_PICK:
-               sp[0] = sp[sp[0]+1]; break;
-
-          case P_DEPTH:
-               t = (int *) &mem[MEMSIZE] - sp; *--sp = t;
-               break;
-
-          case P_POP:
-               sp++; break;
-
-          case P_SWAP:
-               t = sp[0]; sp[0] = sp[1]; sp[1] = t;
-               break;
-
-          case P_ROT:
-               t = sp[2]; sp[2] = sp[1]; sp[1] = sp[0]; sp[0] = t;
-               break;
-
-          case P_BRANCH0:
-               t = (signed short) *ip++;
-               if (*sp++ == 0) ip += t;
-               break;
-
-          case P_BRANCH:
-               t = (signed short) *ip++; ip += t; break;
-
-          case P_LIT:
-               *--sp = (signed short) *ip++; break;
-
-          case P_LIT2:
-               *--sp = (ip[1] << 16) + ip[0]; ip += 2; break;
-
-          case P_EXECUTE:
-               w = (def *) &mem[*sp++];
-               goto reswitch;
-
-          case P_CALL:
-               t = (int) w->d_data;
-               (* (void (*)(void)) t)();
-               break;
-
-          case P_VAR:
-               *--sp = (int) w->d_data;
-               break;
-
-          case P_CONST:
-               *--sp = * (int *) w->d_data;
-               break;
-
-          case P_GENTOK:
-               * (short *) tp = *sp++;
-               tp += sizeof(short);
-               break;
-
-          case P_IMMED:
-               sp[0] = ((((def *) &mem[sp[0]])->d_flags & IMMED) != 0);
-               break;
+#undef prim0
+#define prim0(p, a) case p: a; break;
+PRIMS
 
           default:
                printf("Unknown action\n");
@@ -315,14 +230,8 @@ quit:
 
 // Primitives as subroutines
 
-uchar *defbase = NULL;
-
 void p_dot(void) {
      printf(" %d", (int) *sp++);
-}
-
-void p_nl(void) {
-     printf("\n");
 }
 
 void p_find(void) {
@@ -335,10 +244,6 @@ void p_find(void) {
           *--sp = 1;
      }
 }
-
-void p_bl(void) {
-     while (*inp != '\0' && isspace(*inp)) inp++;
-}     
 
 void p_scan(void) {
      char *base = (char *) sp[0];
@@ -383,16 +288,6 @@ void p_putc(void) {
      putchar(*sp++);
 }
 
-void p_stack(void) {
-     int *p;
-
-     for (p = (int *) sp; p < (int *) &mem[MEMSIZE]; p++) {
-          printf(" %d", *p);
-     }
-
-     printf("\n");
-}
-
 void p_create(void) {
      char name[32];
      strcpy(name, (char *) sp[0]); // Save from scratch area
@@ -406,15 +301,13 @@ void p_create(void) {
           if (defbase == NULL) 
                d = create(name);
           else {
-               printf("The Earth moved for me\n");
+               printf("Moving for %s: defbase = %#x\n", 
+                      name, (unsigned) defbase);
 
                // Calculate required space
                unsigned a = 
                     ALIGN(defbase+sizeof(def)+strlen(name)+1, 4) - defbase;
                unsigned b = dp - defbase;
-
-               printf("defbase = %u, a = %u, b = %u\n",
-                      (unsigned) defbase, a, b);
 
                // Move partial code out of the way
                memmove(defbase+a, defbase, b);
@@ -422,7 +315,6 @@ void p_create(void) {
                // Reset dp and create the definition
                dp = defbase;
                d = create(name);
-               printf("d = %u\n", (unsigned) d);
                assert((uchar *) d == defbase);
                assert(dp == defbase+a);
 
@@ -443,12 +335,10 @@ void p_defword(void) {
      d->d_data = data;
      sp += 3;
 
-     printf("%s defined\n", def_name(d));
-}
+     dp = ALIGN(dp, 4);
+     defbase = NULL;
 
-void p_immediate(void) {
-     def *d = (def *) &mem[sp[0]];
-     d->d_flags |= IMMED;
+     printf("%s defined\n", def_name(d));
 }
 
 #include <setjmp.h>
@@ -456,12 +346,11 @@ void p_immediate(void) {
 jmp_buf finish;
 
 void p_accept(void) {
+#ifndef DUMP
      printf("> "); fflush(stdout);
+#endif
      if (fgets(inbuf, INBUF, stdin) == NULL)
           longjmp(finish, 1);
-#ifdef DUMP
-     printf("%s", inbuf);
-#endif
      inp = inbuf;
 }
 
@@ -557,46 +446,22 @@ void immediate(char *name) {
 }
 
 void init_dict(void) {
-     primitive("@", P_GET);
-     primitive("!", P_PUT);
-     primitive("ch@", P_CHGET);
-     primitive("ch!", P_CHPUT);
-     primitive("tok@", P_TOKGET);
-     primitive("tok!", P_TOKPUT);
-     primitive("+", P_ADD);
-     primitive("-", P_SUB);
-     primitive("*", P_MUL);
-     primitive("/", P_DIV);
-     primitive("mod", P_MOD);
-     primitive("=", P_EQ);
-     primitive("<", P_LESS);
-     primitive("and", P_AND);
-     primitive("or", P_OR);
-     primitive("xor", P_XOR);
-     primitive("dup", P_DUP);
-     primitive("pick", P_PICK);
-     primitive("depth", P_DEPTH);
-     primitive("pop", P_POP);
-     primitive("swap", P_SWAP);
-     primitive("rot", P_ROT);
-     primitive("branch0", P_BRANCH0);
-     primitive("branch", P_BRANCH);
-     primitive("lit", P_LIT);
-     primitive("lsl", P_LSL);
-     primitive("lsr", P_LSR);
-     primitive("asr", P_ASR);
-     primitive("lit2", P_LIT2);
-     primitive("exit", P_EXIT);
+#undef prim
+#define prim(s, p, a) primitive(s, p);
+#undef prim0
+#define prim0(p, a)
+PRIMS
+
      prim_subr(".", p_dot);
-     prim_subr("nl", p_nl);
      prim_subr("word", p_word);
-     prim_subr("bl", p_bl);
      prim_subr("scan", p_scan);
      prim_subr("find", p_find);
-     primitive("execute", P_EXECUTE);
      prim_subr("number", p_number);
      prim_subr("putc", p_putc);
-     prim_subr("stack", p_stack);
+     prim_subr("[create]", p_create);
+     prim_subr("defword", p_defword);
+     prim_subr("accept", p_accept);
+
      defvar("state", &state);
      defvar("dp", &dp);
      defvar("tp", &tp);
@@ -604,38 +469,31 @@ void init_dict(void) {
      defvar("base", &defbase);
      defvar("trace", &trace);
      defvar("dict", &dict);
-     primitive("gentok", P_GENTOK);
+
      defconst("ENTER", P_ENTER);
      defconst("EXIT", P_EXIT);
      defconst("VAR", P_VAR);
      defconst("CONST", P_CONST);
      defvar("MEM", mem);
-     prim_subr("[create]", p_create);
-     primitive("immed?", P_IMMED);
-     prim_subr("defword", p_defword);
-     prim_subr("immediate", p_immediate);
-     immediate("immediate");
+
+     primitive("?colon", P_NOP);
      primitive("?comp", P_NOP);
-     primitive("?interp", P_NOP);
-     prim_subr("accept", p_accept);
-     primitive("quit", P_QUIT);
 
      assemble("not", L(0), W("="), EXIT);
+     assemble("?tag", W("pop"), W("pop"), EXIT);
 
-     // : : immediate ?interp 1 state ! word [create] tp @ base ! ;
+     // : : immediate interp 1 state ! word [create] tp @ base ! 16180 ;
      assemble(":",
-              W("?interp"), L(1), W("state"), W("!"), 
+              W("?colon"), L(1), W("state"), W("!"), 
               W("word"), W("[create]"), 
-              W("tp"), W("@"), W("base"), W("!"), EXIT);
+              W("tp"), W("@"), W("base"), W("!"), L(16180), EXIT);
      immediate(":");
 
-     // : ; immediate ?comp quote exit 0 state ! ENTER base @ defword 
-     //    0 base !;
+     // : ; immediate 16180 ?tag quote exit 0 state ! ENTER base @ defword ;
      assemble(";",
-              W("?comp"), W("lit"), W("exit"), W("gentok"), 
+              L(16180), W("?tag"), W("lit"), W("exit"), W("gentok"), 
               L(0), W("state"), W("!"),
-              W("ENTER"), W("base"), W("@"), W("defword"),
-              L(0), W("base"), W("!"), EXIT);
+              W("ENTER"), W("base"), W("@"), W("defword"), EXIT);
      immediate(";");
 
      // litnum should use lit2 when needed

@@ -1,3 +1,8 @@
+: ' word [create] ;
+
+: immediate 1 pick MEM + dup @ 0x10000 or swap ! ;
+' immediate 0 immediate pop pop
+
 : # immediate 10 dp @ scan pop ;
 # Now we can write comments like this
 
@@ -24,21 +29,23 @@
 : <= > not ;
 : >= < not ;
 : <> = not ;
+: nl 10 putc ;
 
 : xchg # Exchange between stack and memory
 dup @ -rot ! ;
 
 # Access to R-stack
-: >r rp @ xchg rp @ cell- dup rp ! ! ;
-: r> rp @ @ rp @ cell+ dup rp ! xchg ;
+# I like these definitions, but they are probably too slow
+# : >r rp @ xchg rp @ cell- dup rp ! ! ;
+# : r> rp @ @ rp @ cell+ dup rp ! xchg ;
 
 # Quotations
-: ' word [create] ;
 : ['] immediate lit lit gentok ' gentok ;
 : [compile] immediate ' gentok ;
-: quote immediate lit lit gentok ' gentok lit gentok gentok ;
+: quote immediate [compile] ['] ['] gentok gentok ;
 
 # Control structures
+# THERE points into the ROM space if bootstrapping
 : there tp @ ;
 
 : >mark there 0 gentok ;
@@ -47,37 +54,38 @@ dup @ -rot ! ;
 : <mark there ;
 : <resolve there - 2/ 1- gentok ;
 
-: if immediate quote branch0 >mark ;
-: else immediate quote branch >mark swap >resolve ;
-: fi immediate >resolve ;
+: if immediate ?comp quote branch0 >mark 31415 ;
+: else immediate 31415 ?tag quote branch >mark swap >resolve 31415 ;
+: fi immediate 31415 ?tag >resolve ;
 
 : ?dup dup if dup fi ;
 
-: do immediate <mark 0 ;
-: while immediate pop quote branch0 >mark ;
-: od immediate swap quote branch <resolve ?dup if >resolve fi ;
+: do immediate ?comp <mark 0 27183 ;
+: while immediate 27183 ?tag pop quote branch0 >mark 27183 ;
+: od immediate 27183 ?tag swap quote branch <resolve ?dup if >resolve fi ;
 
 : dump depth do ?dup while dup pick . 1- od nl ;
 : clear do depth while pop od ;
 
 # Storage allocation
+
+# HERE points into the RAM space
 : here dp @ ;
 : , here dup cell+ dp ! ! ;
 : constant word [create] CONST here defword , ;
 : variable word [create] VAR here defword ;
-: allot here + dp ! ;
+: allot here + 4 aligned dp ! ;
 
 # Strings
 : char word ch@ ;
-: [char] immediate quote lit char gentok ;
+: [char] immediate ?comp quote lit char gentok ;
 : strlen dup do dup ch@ while 1+ od swap - ;
 : putstr do dup ch@ dup while putc 1+ od 2pop ;
 : litstr r> dup 2 + swap tok@ over + >r ;
 
 : " immediate
-quote litstr 0 gentok [char] " there scan 
-strlen 1+ 2 aligned
-dup there 2 - tok! there + tp ! ;
+?comp quote litstr 0 gentok [char] " there scan 
+strlen 1+ 2 aligned dup there 2 - tok! there + tp ! ;
 
 : ." immediate [compile] " quote putstr ;
 
@@ -117,11 +125,16 @@ fi ;
 : unknown # Unknown word in outer interpreter
 putstr space ." is undefined" nl quit ;
 
-: ?comp # Called from compile-only words
-state @ not if ." Not compiling" nl quit fi ;
+: reset # Delete any half-complete definition
+base @ if base @ dp ! fi quit ;
 
-: ?interp # Called at start of :
-state @ if ." Already compiling" nl 
-  base @ if base @ dp ! fi quit fi ;
+: ?comp # Called from compile-only words
+state @ not if ." Compile-only word" nl quit fi ;
+
+: ?colon # Called at start of :
+state @ if ." Already compiling -- maybe missing ;" nl reset fi ;
+
+: ?tag # Check tags for control structure
+depth 2 >= if <> else 1 fi if ." Bad nesting" nl reset fi ;
 
 names
