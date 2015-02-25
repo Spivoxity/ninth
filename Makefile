@@ -8,7 +8,7 @@ ninth: kernel.c boot.c
 
 boot.c: ninthboot system.nth
 	ninthboot <system.nth | sed -f script
-	[ ! -z $@ ]
+	[ -s $@ ]
 
 ninthboot: kernel.c
 	$(CC) $(CFLAGS) -DDUMP -o $@ $<
@@ -17,3 +17,5 @@ clean: force
 	rm -f boot.c ninth ninthboot tmpa
 
 force:
+
+.DELETE_ON_ERROR:

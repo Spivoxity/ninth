@@ -31,8 +31,8 @@
 : <> = not ;
 : nl 10 putc ;
 
-: xchg # Exchange between stack and memory
-dup @ -rot ! ;
+# : xchg # Exchange between stack and memory
+# dup @ -rot ! ;
 
 # Access to R-stack
 # I like these definitions, but they are probably too slow
@@ -48,21 +48,36 @@ dup @ -rot ! ;
 # THERE points into the ROM space if bootstrapping
 : there tp @ ;
 
-: >mark there 0 gentok ;
-: >resolve there over - 2/ 1- swap tok! ;
+# Label values are relative to base to allow for the earth moving
+# We add a constant to make them non-zero, because 0 is used as a flag in DO
+: origin base @ 1000 - ;
+: offset there origin - ;
 
-: <mark there ;
-: <resolve there - 2/ 1- gentok ;
+: branch0> quote branch0 offset 0 gentok ;
+: branch> quote branch offset 0 gentok ;
+: >label offset over - 2/ 1- swap origin + tok! ;
 
-: if immediate ?comp quote branch0 >mark 31415 ;
-: else immediate 31415 ?tag quote branch >mark swap >resolve 31415 ;
-: fi immediate 31415 ?tag >resolve ;
+: <branch quote branch offset - 2/ 1- gentok ;
+: label< offset ;
+
+: ??comp immediate quote lit over gentok quote ?comp ;
+
+: if immediate ??comp branch0> 31415 ;
+: else immediate 31415 ?tag branch> swap >label 31415 ;
+: fi immediate 31415 ?tag >label ;
 
 : ?dup dup if dup fi ;
 
-: do immediate ?comp <mark 0 27183 ;
-: while immediate 27183 ?tag pop quote branch0 >mark 27183 ;
-: od immediate 27183 ?tag swap quote branch <resolve ?dup if >resolve fi ;
+: do immediate ??comp label< 0 27183 ;
+: while immediate 27183 ?tag pop branch0> 27183 ;
+: od immediate 27183 ?tag swap <branch ?dup if >label fi ;
+
+: for immediate ??comp
+quote swap quote >r label< quote dup quote r@ quote < 
+branch0> quote >r 14142 ;
+: repeat immediate 14142 ?tag 
+swap quote r> quote 1+ <branch >label quote r> quote 2pop ;
+: i rp @ cell+ @ ;
 
 : dump depth do ?dup while dup pick . 1- od nl ;
 : clear do depth while pop od ;
@@ -72,19 +87,19 @@ dup @ -rot ! ;
 # HERE points into the RAM space
 : here dp @ ;
 : , here dup cell+ dp ! ! ;
-: constant word [create] CONST here defword , ;
-: variable word [create] VAR here defword ;
-: allot here + 4 aligned dp ! ;
+: constant ' align CONST here defword , ;
+: variable ' align VAR here defword ;
+: allot here + dp ! ;
 
 # Strings
 : char word ch@ ;
-: [char] immediate ?comp quote lit char gentok ;
+: [char] immediate ??comp quote lit char gentok ;
 : strlen dup do dup ch@ while 1+ od swap - ;
-: putstr do dup ch@ dup while putc 1+ od 2pop ;
+: putstr do dup ch@ ?dup while putc 1+ od pop ;
 : litstr r> dup 2 + swap tok@ over + >r ;
 
 : " immediate
-?comp quote litstr 0 gentok [char] " there scan 
+??comp quote litstr 0 gentok [char] " there scan 
 strlen 1+ 2 aligned dup there 2 - tok! there + tp ! ;
 
 : ." immediate [compile] " quote putstr ;
@@ -96,6 +111,11 @@ strlen 1+ 2 aligned dup there 2 - tok! there + tp ! ;
 : def>data MEM + 8 + @ ;
 : def>name MEM + 12 + ;
 
+# Reimplementation of defword
+: defword # word exec data
+rot MEM + tuck 8 + ! tuck 4 + ! 12 + putstr space ." defined" nl ;
+
+
 : names 
 dict @ do dup 0 >= while dup space def>name putstr def>next od pop nl ;
 
@@ -104,9 +124,26 @@ dict @ do dup 0 >= while dup space def>name putstr def>next od pop nl ;
 : isword # Test if token is in the dictionary
 dict @ do dup 0 >= while 2dup = if 2pop 1 exit fi def>next od 2pop 0 ;
 
-: disword dup isword if space def>name putstr else . fi ;
+: disstr dup tok@ swap 2 + tuck + swap putstr ;
 
-: disbody do dup tok@ dup disword ['] exit <> while 2 + od nl pop ;
+: disword # Disassemble word and advance pointer
+dup tok@ 
+dup ['] litstr = if 
+  pop space [char] " putc space 2 + disstr [char] " putc 
+else
+  dup ['] lit = if 
+    pop 2 + dup tok@ .
+  else dup ['] branch = over ['] branch0 = or if
+    space def>name putstr 2 + dup tok@ .
+  else dup isword if 
+    space def>name putstr 
+  else 
+    . 
+  fi fi fi
+  2 + 
+fi ;
+
+: disbody do dup tok@ swap disword swap ['] exit <> while od nl pop ;
 
 : dis # Disassemble up to exit token
 word find if
@@ -119,22 +156,26 @@ else
   putstr space ." is unknown" nl
 fi ;
 
-
 # Top level support
 
+: banner ." NINTH --" MEMEND dp @ - . space ." bytes free" nl ;
+
+: error ." Error: " ;
+
 : unknown # Unknown word in outer interpreter
-putstr space ." is undefined" nl quit ;
+error putstr space ." is undefined" nl quit ;
 
 : reset # Delete any half-complete definition
 base @ if base @ dp ! fi quit ;
 
-: ?comp # Called from compile-only words
-state @ not if ." Compile-only word" nl quit fi ;
+: ?comp # Called from compile-only words via ??comp
+state @ not if error def>name putstr space ." is a compile-only word" nl quit 
+else pop fi ;
 
 : ?colon # Called at start of :
-state @ if ." Already compiling -- maybe missing ;" nl reset fi ;
+state @ if error ." already in compile state -- maybe missing ;" nl reset fi ;
 
 : ?tag # Check tags for control structure
-depth 2 >= if <> else 1 fi if ." Bad nesting" nl reset fi ;
+depth 2 >= if <> else 1 fi if error ." bad nesting" nl reset fi ;
 
 names
