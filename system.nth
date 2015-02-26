@@ -30,6 +30,7 @@
 : >= < not ;
 : <> = not ;
 : nl 10 putc ;
+: inc dup @ 1+ swap ! ;
 
 # : xchg # Exchange between stack and memory
 # dup @ -rot ! ;
@@ -49,8 +50,7 @@
 : there tp @ ;
 
 # Label values are relative to base to allow for the earth moving
-# We add a constant to make them non-zero, because 0 is used as a flag in DO
-: origin base @ 1000 - ;
+: origin base @ ;
 : offset there origin - ;
 
 : branch0> quote branch0 offset 0 gentok ;
@@ -60,23 +60,24 @@
 : <branch quote branch offset - 2/ 1- gentok ;
 : label< offset ;
 
-: ??comp immediate quote lit over gentok quote ?comp ;
+: [?comp] immediate quote lit over gentok quote ?comp ;
 
-: if immediate ??comp branch0> 31415 ;
+: if immediate [?comp] branch0> 31415 ;
 : else immediate 31415 ?tag branch> swap >label 31415 ;
 : fi immediate 31415 ?tag >label ;
 
 : ?dup dup if dup fi ;
 
-: do immediate ??comp label< 0 27183 ;
+: do immediate [?comp] label< 0 27183 ;
 : while immediate 27183 ?tag pop branch0> 27183 ;
-: od immediate 27183 ?tag swap <branch ?dup if >label fi ;
+: od immediate 27183 ?tag swap <branch ?dup 0 >= if >label fi ;
 
-: for immediate ??comp
+: for immediate [?comp]
 quote swap quote >r label< quote dup quote r@ quote < 
 branch0> quote >r 14142 ;
-: repeat immediate 14142 ?tag 
-swap quote r> quote 1+ <branch >label quote r> quote 2pop ;
+: +repeat immediate 14142 ?tag 
+swap quote r> quote + <branch >label quote r> quote 2pop ;
+: repeat immediate quote lit 1 gentok [compile] +repeat ;
 : i rp @ cell+ @ ;
 
 : dump depth do ?dup while dup pick . 1- od nl ;
@@ -93,17 +94,34 @@ swap quote r> quote 1+ <branch >label quote r> quote 2pop ;
 
 # Strings
 : char word ch@ ;
-: [char] immediate ??comp quote lit char gentok ;
+: [char] immediate [?comp] quote lit char gentok ;
 : strlen dup do dup ch@ while 1+ od swap - ;
+
+: strcpy # dest source
+do 2dup ch@ tuck swap ch! while 1+ swap 1+ swap od 2pop ;
+
+: strcmp
+do tuck ch@ dup if over ch@ swap - dup not
+else pop dup ch@ 0 fi while pop 1+ swap 1+ od nip nip ;
+
 : putstr do dup ch@ ?dup while putc 1+ od pop ;
 : litstr r> dup 2 + swap tok@ over + >r ;
 
 : " immediate
-??comp quote litstr 0 gentok [char] " there scan 
+[?comp] quote litstr 0 gentok [char] " there scan 
 strlen 1+ 2 aligned dup there 2 - tok! there + tp ! ;
 
 : ." immediate [compile] " quote putstr ;
 
+# Reimplementation of scan
+: scan # delim base
+tuck do over inp @ ch@ dup 
+  if tuck <> fi # base delim p ch flag
+while
+  over ch! 1+ inp @ 1+ inp !
+od
+pop 0 swap ch! pop inp @ dup @ if 1+ inp ! fi ;
+  
 
 # Dictionary layout
 : def>next MEM + tok@ ;
@@ -111,25 +129,67 @@ strlen 1+ 2 aligned dup there 2 - tok! there + tp ! ;
 : def>data MEM + 8 + @ ;
 : def>name MEM + 12 + ;
 
+# Reimplementation of find
+: find
+dict @ do dup 0 >= while tuck def>name over strcmp not if pop 1 exit fi 
+swap def>next od pop 0 ;
+
 # Reimplementation of defword
 : defword # word exec data
 rot MEM + tuck 8 + ! tuck 4 + ! 12 + putstr space ." defined" nl ;
 
+: header
+align dp @ MEM -
+dict @ , UNKNOWN , 0 ,
+dup dict ! swap # word string
+dup dp @ swap strcpy
+strlen dp @ + 1+ dp ! ;
 
-: names 
-dict @ do dup 0 >= while dup space def>name putstr def>next od pop nl ;
+: memmove # dest src nbytes
+do dup while   
+  2 - >r tuck r@ + tok@ # src dst x
+  over r@ + tok! swap r>
+od pop 2pop ;
+
+# Reimplementation of [create]
+: [create]
+find not if 
+  base @ not tp dp <> or if
+    header
+  else
+    # The Earth moves ...
+    ." Moving for " dup putstr nl
+    dup strlen 13 + 4 aligned # a = Size of header
+    dp @ base @ - # b = Size of code fragment
+    over base @ tuck + swap 2 pick memmove
+    base @ dp ! rot header -rot align
+    swap base @ + dup base ! + dp !
+  fi
+fi ;
+
+: isspace dup 10 = swap 32 = or ;
+
+# Reimplementation of word
+: word
+do inp @ ch@ dup if isspace fi while inp inc od
+pad do inp @ ch@ dup dup if isspace not fi
+while over ch! 1+ inp inc od
+pop 0 swap ch! inp @ ch@ if inp inc fi pad ;
 
 
 # Disassembler
+: names 
+dict @ do dup 0 >= while dup space def>name putstr def>next od pop nl ;
+
 : isword # Test if token is in the dictionary
 dict @ do dup 0 >= while 2dup = if 2pop 1 exit fi def>next od 2pop 0 ;
 
-: disstr dup tok@ swap 2 + tuck + swap putstr ;
+: seestr dup tok@ swap 2 + tuck + swap putstr ;
 
-: disword # Disassemble word and advance pointer
+: seeword # Disassemble word and advance pointer
 dup tok@ 
 dup ['] litstr = if 
-  pop space [char] " putc space 2 + disstr [char] " putc 
+  pop space [char] " putc space 2 + seestr [char] " putc 
 else
   dup ['] lit = if 
     pop 2 + dup tok@ .
@@ -143,12 +203,12 @@ else
   2 + 
 fi ;
 
-: disbody do dup tok@ swap disword swap ['] exit <> while od nl pop ;
+: seebody do dup tok@ swap seeword swap ['] exit <> while od nl pop ;
 
-: dis # Disassemble up to exit token
+: see # Disassemble up to exit token
 word find if
   dup def>exec ENTER = if
-    def>data disbody
+    def>data seebody
   else
     def>name putstr space ." is not a secondary" nl
   fi
@@ -168,7 +228,7 @@ error putstr space ." is undefined" nl quit ;
 : reset # Delete any half-complete definition
 base @ if base @ dp ! fi quit ;
 
-: ?comp # Called from compile-only words via ??comp
+: ?comp # Called from compile-only words via [?comp]
 state @ not if error def>name putstr space ." is a compile-only word" nl quit 
 else pop fi ;
 
