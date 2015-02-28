@@ -32,6 +32,6 @@ force:
 
 ###
 
-$(NINTH) $(NINTHBOOT): ninth.h prims.h
+$(NINTH) $(NINTHBOOT): ninth.h
 kernel.o: boot.c
 

@@ -32,6 +32,10 @@ void p_number(void) {
 }
 
 #ifndef BOOT
+void p_immed(void) {
+     sp[0] = ((((def *) &mem[sp[0]])->d_flags & IMMED) != 0);
+}
+
 void p_word(void) {
      char *p = pad;
 
@@ -42,6 +46,10 @@ void p_word(void) {
      *p = '\0';
      
      *--sp = (int) pad;
+}
+
+void p_gentok(void) {
+     * (short *) tp = *sp++; tp += sizeof(short);
 }
 
 void p_defword(void) {
@@ -57,7 +65,7 @@ void p_defword(void) {
 
 void p_create(void) {
      char *name = (char *) sp[0];
-     def *d = find_create(name);
+     def *d = create(name);
      sp[0] = tok(d);
 }
 

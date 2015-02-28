@@ -9,7 +9,7 @@ def *header(char *name) {
      def *p;
 
      if (defbase != NULL) {
-          printf("Attempting to define %s in mid-stream\n", name);
+          printf("Attempting to create %s in mid-stream\n", name);
           exit(1);
      }
 
@@ -24,7 +24,7 @@ def *header(char *name) {
      dict = tok(p);
 
      strcpy((char *) dp, name);
-     dp += strlen(name)+1;
+     dp = ALIGN(dp+strlen(name)+1, 4);
 
      return p;
 }
@@ -42,8 +42,8 @@ def *find(char *name) {
      return NULL;
 }
 
-// find_create -- find dictionary entry or create if needed
-def *find_create(char *name) {
+// create -- find dictionary entry or create if needed
+def *create(char *name) {
      def *d = find(name);
      if (d != NULL) return d;
      return header(name);
@@ -66,12 +66,12 @@ void defsym(def *d, uchar *addr, char *sym) {
 }
 
 void primitive(char *name, int token) {
-     def *d = find_create(name);
+     def *d = create(name);
      d->d_execute = token;
 }
 
 void _prim_subr(char *name, void (*subr)(void), char *sym) {
-     def *d = find_create(name);
+     def *d = create(name);
      d->d_execute = P_CALL;
      d->d_data = (uchar *) subr;
      defsym(d, (uchar *) subr, sym);
@@ -80,7 +80,7 @@ void _prim_subr(char *name, void (*subr)(void), char *sym) {
 #define prim_subr(name, subr) _prim_subr(name, subr, #subr)
 
 void _defvar(char *name, uchar *addr, char *sym) {
-     def *d = find_create(name);
+     def *d = create(name);
      d->d_execute = P_VAR;
      d->d_data = addr;
      defsym(d, addr, sym);
@@ -89,7 +89,7 @@ void _defvar(char *name, uchar *addr, char *sym) {
 #define defvar(name, addr) _defvar(name, (uchar *) addr, #addr)
 
 void defconst(char *name, unsigned val) {
-     def *d = find_create(name);
+     def *d = create(name);
      d->d_execute = P_CONST;
      d->d_data = dp;
      * (unsigned *) dp = val;
@@ -101,16 +101,16 @@ ushort W(char *name) {
      // any surrounding call to assemble(), so we need not worry about
      // interfering with a partial definition
      
-     def *d = find_create(name);
+     def *d = create(name);
      return (uchar *) d - mem;
 }
 
 #define L(n) W("lit"), n
 
-#define EXIT 0xdeadbeef
+#define END 0xdeadbeef
 
 void assemble(char *name, ...) {
-     def *d = find_create(name);
+     def *d = create(name);
      uchar *base = tp;
      unsigned tok;
      va_list va;
@@ -118,11 +118,11 @@ void assemble(char *name, ...) {
      va_start(va, name);
      while (1) {
           tok = va_arg(va, unsigned);
-          if (tok == EXIT) break;
+          if (tok == END) break;
           * (ushort *) tp = tok;
           tp += sizeof(ushort);
      } 
-     * (ushort *) tp = W("exit");
+     * (ushort *) tp = W("e_n_d");
      tp += sizeof(ushort);
      va_end(va);
 
@@ -131,15 +131,15 @@ void assemble(char *name, ...) {
 }
 
 void immediate(char *name) {
-     def *d = find_create(name);
+     def *d = create(name);
      d->d_flags |= IMMED;
 }
 
 void init_dict(void) {
 #undef prim
-#define prim(s, p, a) primitive(s, p);
 #undef prim0
-#define prim0(p, a)
+#define prim(s, p) primitive(s, p);
+#define prim0(p)
 PRIMS
 
      prim_subr(".", p_dot);
@@ -148,9 +148,11 @@ PRIMS
      prim_subr("find", p_find);
      prim_subr("number", p_number);
      prim_subr("putc", p_putc);
-     prim_subr("[create]", p_create);
+     prim_subr("create", p_create);
      prim_subr("defword", p_defword);
      prim_subr("accept", p_accept);
+     prim_subr("immed?", p_immed);
+     prim_subr("gentok", p_gentok);
 
      defvar("state", &state);
      defvar("dp", &dp);
@@ -164,8 +166,8 @@ PRIMS
      defvar("MEM", mem);
      defvar("MEMEND", &mem[MEMSIZE]);
 
+     defconst("DEFTAG", 16180);
      defconst("ENTER", P_ENTER);
-     defconst("EXIT", P_EXIT);
      defconst("VAR", P_VAR);
      defconst("CONST", P_CONST);
      defconst("UNKNOWN", P_UNKNOWN);
@@ -175,57 +177,51 @@ PRIMS
      primitive("?comp", P_POP);
      primitive("banner", P_NOP);
 
-     assemble("not", L(0), W("="), EXIT);
-     assemble("?tag", W("pop"), W("pop"), EXIT);
+     assemble("not", L(0), W("="), END);
+     assemble("?tag", W("pop"), W("pop"), END);
 
-     // : : immediate interp 1 state ! word [create] tp @ base ! ['] : ;
+     // : : immediate interp 1 state ! word create tp @ base ! DEFTAG ;
      assemble(":",
               W("?colon"), L(1), W("state"), W("!"), 
-              W("word"), W("[create]"), W("align"),
-              W("tp"), W("@"), W("base"), W("!"), L(16180), EXIT);
+              W("word"), W("create"),
+              W("tp"), W("@"), W("base"), W("!"), W("DEFTAG"), END);
      immediate(":");
 
-     // : ; immediate 16180 ?tag quote exit 0 state ! 
+     // : ; immediate DEFTAG ?tag quote exit 0 state ! 
      //    ENTER base @ defword 0 base ! ;
      assemble(";",
-              L(16180), W("?tag"), W("lit"), W("exit"), W("gentok"), 
+              W("DEFTAG"), W("?tag"), W("lit"), W("e_n_d"), W("gentok"), 
               L(0), W("state"), W("!"),
               W("ENTER"), W("base"), W("@"), W("defword"), 
-              L(0), W("base"), W("!"), EXIT);
+              L(0), W("base"), W("!"), END);
      immediate(";");
 
-     // litnum should use lit2 when needed
      // : litnum dup dup 16 lsl 16 asr = if
      //    quote lit gentok else quote lit2 dup gentok 16 lsr gentok fi ;
      assemble("litnum", 
               W("dup"), W("dup"), L(16), W("lsl"), L(16), W("asr"),
-              W("="), W("branch0"), 6,
-              W("lit"), W("lit"), W("gentok"), W("gentok"), W("branch"), 9,
+              W("="), W("branch0"), 5,
+              W("lit"), W("lit"), W("gentok"), W("gentok"), W("exit"),
               W("lit"), W("lit2"), W("gentok"), W("dup"), W("gentok"),
-              L(16), W("lsr"), W("gentok"), EXIT);
+              L(16), W("lsr"), W("gentok"), END);
 
      // : immword dup immed? if execute else gentok fi ;
      assemble("immword",
-              W("dup"), W("immed?"), W("branch0"), 3,
-              W("execute"), W("branch"), 1,
-              W("gentok"), EXIT);
+              W("dup"), W("immed?"), W("branch0"), 2,
+              W("execute"), W("exit"), W("gentok"), END);
 
      // : compile find if immword else number if litnum
-     //    else [create] gentok fi fi ;
+     //    else create gentok fi fi ;
      assemble("compile",
-              W("find"), W("branch0"), 3,
-              W("immword"), W("branch"), 8,
-              W("number"), W("branch0"), 3,
-              W("litnum"), W("branch"), 2,
-              W("[create]"), W("gentok"),
-              EXIT);
+              W("find"), W("branch0"), 2, W("immword"), W("exit"),
+              W("number"), W("branch0"), 2, W("litnum"), W("exit"),
+              W("create"), W("gentok"), END);
 
-     // : interp find if execute else number not if quit fi fi ;
+     // : interp find if execute else number not if unknown fi fi ;
      assemble("interp",
-              W("find"), W("branch0"), 3,
-              W("execute"), W("branch"), 5,
+              W("find"), W("branch0"), 2, W("execute"), W("exit"),
               W("number"), W("not"), W("branch0"), 1,
-              W("unknown"), EXIT);
+              W("unknown"), END);
 
      // : repl do word dup ch@ while 
      //    state @ if compile else interp fi fi od pop
@@ -234,10 +230,10 @@ PRIMS
               W("state"), W("@"), W("branch0"), 3,
               W("compile"), W("branch"), -12, 
               W("interp"), W("branch"), -15,
-              W("pop"), EXIT);
+              W("pop"), END);
 
      // : main do accept repl od
      assemble("main",
               W("banner"), 
-              W("accept"), W("repl"), W("branch"), -4, EXIT);
+              W("accept"), W("repl"), W("branch"), -4, END);
 }

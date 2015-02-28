@@ -1,12 +1,13 @@
-: ' word [create] ;
+: ' word create ;
 
-: immediate 1 pick MEM + dup @ 0x10000 or swap ! ;
+: immediate 1 pick MEM + 2 + dup tok@ 1 or swap tok! ;
 ' immediate 0 immediate pop pop
 
 : # immediate 10 dp @ scan pop ;
 # Now we can write comments like this
 
 # Stack manipulations
+: rot 2 roll ;
 : -rot rot rot ;
 : over 1 pick ;
 : 2pop pop pop ;
@@ -19,18 +20,23 @@
 : 1+ 1 + ;
 : 1- 1 - ;
 : 2/ 1 asr ;
+: cell 4 ;
 : cell+ 4 + ;
 : cell- 4 - ;
+: cells 4 * ;
 : space 32 putc ;
 : aligned 1- tuck + swap invert and ;
+: align dp @ cell aligned dp ! ;
 : on 1 swap ! ;
 : off 0 swap ! ;
 : > swap < ;
-: <= > not ;
+: <= swap < not ;
 : >= < not ;
-: <> = not ;
+: != = not ;
 : nl 10 putc ;
 : inc dup @ 1+ swap ! ;
+: 0< 0 < ;
+: negate 0 - ;
 
 # : xchg # Exchange between stack and memory
 # dup @ -rot ! ;
@@ -45,9 +51,20 @@
 : [compile] immediate ' gentok ;
 : quote immediate [compile] ['] ['] gentok gentok ;
 
-# Control structures
+# Storage allocation
+
+# HERE points into the RAM space
+: here dp @ ;
+: , dp @ dup cell+ dp ! ! ;
+: constant ' align CONST here defword , ;
+: variable ' align VAR here defword ;
+: allot here + dp ! ;
+
 # THERE points into the ROM space if bootstrapping
 : there tp @ ;
+: gentok tp @ dup 2 + tp ! tok! ;
+
+# Control structures
 
 # Label values are relative to base to allow for the earth moving
 : origin base @ ;
@@ -62,35 +79,35 @@
 
 : [?comp] immediate quote lit over gentok quote ?comp ;
 
-: if immediate [?comp] branch0> 31415 ;
-: else immediate 31415 ?tag branch> swap >label 31415 ;
-: fi immediate 31415 ?tag >label ;
+31415 constant IFTAG
+27183 constant DOTAG
+14142 constant FORTAG
+
+: if immediate [?comp] branch0> IFTAG ;
+: else immediate IFTAG ?tag branch> swap >label IFTAG ;
+: fi immediate IFTAG ?tag >label ;
 
 : ?dup dup if dup fi ;
 
-: do immediate [?comp] label< 0 27183 ;
-: while immediate 27183 ?tag pop branch0> 27183 ;
-: od immediate 27183 ?tag swap <branch ?dup 0 >= if >label fi ;
+: do immediate [?comp] label< 0 DOTAG ;
+: while immediate DOTAG ?tag pop branch0> DOTAG ;
+: od immediate DOTAG ?tag swap <branch dup 0 >= if >label fi ;
 
 : for immediate [?comp]
 quote swap quote >r label< quote dup quote r@ quote < 
-branch0> quote >r 14142 ;
-: +repeat immediate 14142 ?tag 
+branch0> quote >r FORTAG ;
+: +repeat immediate FORTAG ?tag 
 swap quote r> quote + <branch >label quote r> quote 2pop ;
 : repeat immediate quote lit 1 gentok [compile] +repeat ;
 : i rp @ cell+ @ ;
+: j rp @ 3 cells + @ ;
 
 : dump depth do ?dup while dup pick . 1- od nl ;
 : clear do depth while pop od ;
-
-# Storage allocation
-
-# HERE points into the RAM space
-: here dp @ ;
-: , here dup cell+ dp ! ! ;
-: constant ' align CONST here defword , ;
-: variable ' align VAR here defword ;
-: allot here + dp ! ;
+: spaces 0 for space repeat ;
+: min 2dup < if pop else nip fi ;
+: max 2dup < if nip else pop fi ;
+: abs dup 0< if negate fi ;
 
 # Strings
 : char word ch@ ;
@@ -116,18 +133,22 @@ strlen 1+ 2 aligned dup there 2 - tok! there + tp ! ;
 # Reimplementation of scan
 : scan # delim base
 tuck do over inp @ ch@ dup 
-  if tuck <> fi # base delim p ch flag
+  if tuck != fi # base delim p ch flag
 while
-  over ch! 1+ inp @ 1+ inp !
+  over ch! 1+ inp inc
 od
 pop 0 swap ch! pop inp @ dup @ if 1+ inp ! fi ;
   
 
 # Dictionary layout
 : def>next MEM + tok@ ;
-: def>exec MEM + 4 + @ ;
-: def>data MEM + 8 + @ ;
-: def>name MEM + 12 + ;
+: def>flags MEM + 2 + tok@ ;
+: def>exec MEM + 1 cells + @ ;
+: def>data MEM + 2 cells + @ ;
+: def>name MEM + 3 cells + ;
+
+# Reimplementation of immed?
+: immed? def>flags 1 and 0 != ;
 
 # Reimplementation of find
 : find
@@ -136,32 +157,32 @@ swap def>next od pop 0 ;
 
 # Reimplementation of defword
 : defword # word exec data
-rot MEM + tuck 8 + ! tuck 4 + ! 12 + putstr space ." defined" nl ;
+rot MEM + tuck 2 cells + ! tuck cell+ ! 3 cells + putstr ."  defined" nl ;
 
 : header
 align dp @ MEM -
 dict @ , UNKNOWN , 0 ,
 dup dict ! swap # word string
 dup dp @ swap strcpy
-strlen dp @ + 1+ dp ! ;
+strlen dp @ + 1+ dp ! align ;
 
-: memmove # dest src nbytes
+: moveblock # dest src nbytes
 do dup while   
   2 - >r tuck r@ + tok@ # src dst x
   over r@ + tok! swap r>
 od pop 2pop ;
 
-# Reimplementation of [create]
-: [create]
+# Reimplementation of create
+: create
 find not if 
-  base @ not tp dp <> or if
+  base @ not tp dp != or if
     header
   else
-    # The Earth moves ...
+    # The Earth moves ... hold very tight please!
     ." Moving for " dup putstr nl
-    dup strlen 13 + 4 aligned # a = Size of header
+    dup strlen 13 + cell aligned # a = Size of header
     dp @ base @ - # b = Size of code fragment
-    over base @ tuck + swap 2 pick memmove
+    over base @ tuck + swap 2 pick moveblock
     base @ dp ! rot header -rot align
     swap base @ + dup base ! + dp !
   fi
@@ -203,39 +224,40 @@ else
   2 + 
 fi ;
 
-: seebody do dup tok@ swap seeword swap ['] exit <> while od nl pop ;
+: seebody 
+do dup tok@ ['] e_n_d != while seeword od nl pop ;
 
 : see # Disassemble up to exit token
 word find if
   dup def>exec ENTER = if
     def>data seebody
   else
-    def>name putstr space ." is not a secondary" nl
+    def>name putstr ."  has no mortal body" nl
   fi
 else
-  putstr space ." is unknown" nl
+  putstr ."  is unknown" nl
 fi ;
 
 # Top level support
 
-: banner ." NINTH --" MEMEND dp @ - . space ." bytes free" nl ;
+: banner ." NINTH --" MEMEND dp @ - . ."  bytes free" nl ;
 
 : error ." Error: " ;
 
 : unknown # Unknown word in outer interpreter
-error putstr space ." is undefined" nl quit ;
+error putstr ."  is undefined" nl quit ;
 
 : reset # Delete any half-complete definition
 base @ if base @ dp ! fi quit ;
 
 : ?comp # Called from compile-only words via [?comp]
-state @ not if error def>name putstr space ." is a compile-only word" nl quit 
+state @ not if error def>name putstr ."  is a compile-only word" nl quit 
 else pop fi ;
 
 : ?colon # Called at start of :
 state @ if error ." already in compile state -- maybe missing ;" nl reset fi ;
 
 : ?tag # Check tags for control structure
-depth 2 >= if <> else 1 fi if error ." bad nesting" nl reset fi ;
+depth 2 >= if != else 1 fi if error ." bad nesting" nl reset fi ;
 
 names
