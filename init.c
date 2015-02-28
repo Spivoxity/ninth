@@ -153,6 +153,7 @@ PRIMS
      prim_subr("accept", p_accept);
      prim_subr("immed?", p_immed);
      prim_subr("gentok", p_gentok);
+     prim_subr("strcmp", p_strcmp);
 
      defvar("state", &state);
      defvar("dp", &dp);
@@ -177,7 +178,7 @@ PRIMS
      primitive("?comp", P_POP);
      primitive("banner", P_NOP);
 
-     assemble("not", L(0), W("="), END);
+     // assemble("not", L(0), W("="), END);
      assemble("?tag", W("pop"), W("pop"), END);
 
      // : : immediate interp 1 state ! word create tp @ base ! DEFTAG ;

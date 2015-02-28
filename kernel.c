@@ -19,6 +19,11 @@ uchar *defbase = NULL;
 
 #define SBASE (MEMSIZE-4)       // One word safety margin for acc
 
+#ifdef PROF
+unsigned ticks = 0;
+unsigned prof[MEMSIZE/4];
+#endif
+
 // Dp is not kept aligned, and must be aligned explicitly before each 
 // definition that needs it.  It is 4-byte aligned before each token
 // string to allow for the earth to move. Tp (if it exists) must be 
@@ -70,6 +75,11 @@ quit:
           w = (def *) &mem[*ip++];
 
      reswitch:
+
+#ifdef PROF
+          ticks++;
+          prof[(int *) w - (int *) mem]++;
+#endif
 
           if (trace) {
                *sp = acc;
@@ -132,8 +142,16 @@ quit:
                sp--; sp[1] = acc;
                break;
 
+          case P_OVER:
+               *sp-- = acc; acc = sp[2];
+               break;
+
           case P_PICK:
                acc = sp[acc+1];
+               break;
+
+          case P_ROT:
+               t = sp[2]; sp[2] = sp[1]; sp[1] = acc; acc = t;
                break;
 
           case P_ROLL:
@@ -154,6 +172,14 @@ quit:
 
           case P_SWAP:
                t = acc; acc = sp[1]; sp[1] = t;
+               break;
+
+          case P_TUCK:
+               sp--; sp[1] = sp[2]; sp[2] = acc;
+               break;
+
+          case P_NIP:
+               sp++;
                break;
 
           case P_RPOP:
@@ -203,6 +229,14 @@ quit:
                *sp-- = acc; acc = * (int *) w->d_data;
                break;
 
+          case P_NOT:
+               acc = ! acc;
+               break;
+
+          case P_MEMPLUS:
+               acc = (int) &mem[acc];
+               break;
+
           default:
                printf("Unknown action\n");
                goto quit;
@@ -222,6 +256,19 @@ quit:
 
 jmp_buf finish;
 
+#ifdef PROF
+void prof_dump(void) {
+     int i;
+
+     for (i = 0; i < MEMSIZE/4; i++) {
+          if (prof[i] > 0) {
+               def *d = (def *) &mem[4*i];
+               printf("%u %s\n", prof[i], def_name(d));
+          }
+     }
+}
+#endif
+
 int main(void) {
 #ifdef BOOT
      dp = &mem[BOOTMEM * sizeof(unsigned)];
@@ -234,7 +281,12 @@ int main(void) {
      if (! setjmp(finish))
           run(MAIN);
 
+#ifdef PROF
+     printf("\nBye (%u ticks)\n", ticks);
+     prof_dump();
+#else
      printf("\nBye\n");
+#endif
 
 #ifdef DUMP
      dump();

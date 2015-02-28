@@ -15,7 +15,7 @@ void p_accept(void) {
 }
 
 void p_dot(void) {
-     printf(" %d", (int) *sp++);
+     printf("%d ", (int) *sp++);
 }
 
 void p_number(void) {
@@ -29,6 +29,11 @@ void p_number(void) {
           *sp = n;
           *--sp = 1;
      }
+}
+
+void p_strcmp(void) {
+     sp[1] = strcmp((char *) sp[1], (char *) sp[0]);
+     sp++;
 }
 
 #ifndef BOOT

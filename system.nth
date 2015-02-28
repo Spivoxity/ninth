@@ -7,13 +7,13 @@
 # Now we can write comments like this
 
 # Stack manipulations
-: rot 2 roll ;
+# : rot 2 roll ;
+# : over 1 pick ;
+# : nip swap pop ;
+# : tuck dup rot rot ;
 : -rot rot rot ;
-: over 1 pick ;
 : 2pop pop pop ;
 : 2dup over over ;
-: nip swap pop ;
-: tuck dup rot rot ;
 
 # Abbreviations
 : invert -1 xor ;
@@ -117,9 +117,9 @@ swap quote r> quote + <branch >label quote r> quote 2pop ;
 : strcpy # dest source
 do 2dup ch@ tuck swap ch! while 1+ swap 1+ swap od 2pop ;
 
-: strcmp
-do tuck ch@ dup if over ch@ swap - dup not
-else pop dup ch@ 0 fi while pop 1+ swap 1+ od nip nip ;
+# : strcmp
+# do tuck ch@ dup if over ch@ swap - dup not
+# else pop dup ch@ 0 fi while pop 1+ swap 1+ od nip nip ;
 
 : putstr do dup ch@ ?dup while putc 1+ od pop ;
 : litstr r> dup 2 + swap tok@ over + >r ;
@@ -141,11 +141,11 @@ pop 0 swap ch! pop inp @ dup @ if 1+ inp ! fi ;
   
 
 # Dictionary layout
-: def>next MEM + tok@ ;
-: def>flags MEM + 2 + tok@ ;
-: def>exec MEM + 1 cells + @ ;
-: def>data MEM + 2 cells + @ ;
-: def>name MEM + 3 cells + ;
+: def>next MEM+ tok@ ;
+: def>flags MEM+ 2 + tok@ ;
+: def>exec MEM+ 1 cells + @ ;
+: def>data MEM+ 2 cells + @ ;
+: def>name MEM+ 3 cells + ;
 
 # Reimplementation of immed?
 : immed? def>flags 1 and 0 != ;
@@ -157,7 +157,7 @@ swap def>next od pop 0 ;
 
 # Reimplementation of defword
 : defword # word exec data
-rot MEM + tuck 2 cells + ! tuck cell+ ! 3 cells + putstr ."  defined" nl ;
+rot MEM+ tuck 2 cells + ! tuck cell+ ! 3 cells + putstr ."  defined" nl ;
 
 : header
 align dp @ MEM -
