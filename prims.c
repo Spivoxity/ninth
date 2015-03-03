@@ -61,7 +61,7 @@ void p_defword(void) {
      def *d = (def *) &mem[sp[2]];
      unsigned action = sp[1];
      uchar *data = (uchar *) sp[0];
-     d->d_execute = action;
+     d->d_action = action;
      d->d_data = data;
      sp += 3;
 

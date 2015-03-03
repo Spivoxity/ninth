@@ -29,9 +29,8 @@ void dump_mem(void) {
 
           if (n >= 0 && p == (uchar *) defs[n]) {
                def *d = (def *) p;
-               printf("%d, %d, ", 
-                      (d->d_next & 0xffff) + (d->d_flags << 16), 
-                      d->d_execute);
+               printf("heading(%d, %u, %u), ", 
+                      d->d_next, d->d_flags, d->d_action);
 
                if (k < nsyms && d == sdefs[k] && d->d_data == addrs[k])
                     printf("sym(%s),", syms[k]);

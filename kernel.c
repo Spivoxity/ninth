@@ -88,7 +88,7 @@ quit:
                printf(" : %s\n", def_name(w));
           }
 
-          switch (w->d_execute) {
+          switch (w->d_action) {
           case P_NOP:
                break;
 
@@ -105,7 +105,6 @@ quit:
                break;
 
           case P_EXIT:
-          case P_END:
                if (rp >= (unsigned *) &rstack[RSTACK]) return;
                ip = (ushort *) *rp++;
                break;
@@ -249,6 +248,8 @@ quit:
 
 #ifdef BOOT
 #define sym(x) (int) x
+#define heading(next, flags, action) \
+     (next & 0xffff) | (flags << 16) | (action << 24)
 #include "boot.c"
 #else
 #define MAIN find("main")

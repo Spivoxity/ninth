@@ -19,7 +19,7 @@ def *header(char *name) {
 
      p->d_next = dict;
      p->d_flags = 0;
-     p->d_execute = P_UNKNOWN;
+     p->d_action = P_UNKNOWN;
      p->d_data = NULL;
      dict = tok(p);
 
@@ -67,12 +67,12 @@ void defsym(def *d, uchar *addr, char *sym) {
 
 void primitive(char *name, int token) {
      def *d = create(name);
-     d->d_execute = token;
+     d->d_action = token;
 }
 
 void _prim_subr(char *name, void (*subr)(void), char *sym) {
      def *d = create(name);
-     d->d_execute = P_CALL;
+     d->d_action = P_CALL;
      d->d_data = (uchar *) subr;
      defsym(d, (uchar *) subr, sym);
 }
@@ -81,7 +81,7 @@ void _prim_subr(char *name, void (*subr)(void), char *sym) {
 
 void _defvar(char *name, uchar *addr, char *sym) {
      def *d = create(name);
-     d->d_execute = P_VAR;
+     d->d_action = P_VAR;
      d->d_data = addr;
      defsym(d, addr, sym);
 }
@@ -90,7 +90,7 @@ void _defvar(char *name, uchar *addr, char *sym) {
 
 void defconst(char *name, unsigned val) {
      def *d = create(name);
-     d->d_execute = P_CONST;
+     d->d_action = P_CONST;
      d->d_data = dp;
      * (unsigned *) dp = val;
      dp += sizeof(unsigned);
@@ -126,7 +126,7 @@ void assemble(char *name, ...) {
      tp += sizeof(ushort);
      va_end(va);
 
-     d->d_execute = P_ENTER;
+     d->d_action = P_ENTER;
      d->d_data = base;
 }
 
@@ -141,6 +141,8 @@ void init_dict(void) {
 #define prim(s, p) primitive(s, p);
 #define prim0(p)
 PRIMS
+
+     primitive("exit", P_EXIT);
 
      prim_subr(".", p_dot);
      prim_subr("word", p_word);
@@ -171,7 +173,6 @@ PRIMS
      defconst("ENTER", P_ENTER);
      defconst("VAR", P_VAR);
      defconst("CONST", P_CONST);
-     defconst("UNKNOWN", P_UNKNOWN);
 
      // These are defined as NOP so they can be redefined in system.nth
      primitive("?colon", P_NOP);

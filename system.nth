@@ -1,6 +1,6 @@
 : ' word create ;
 
-: immediate 1 pick MEM + 2 + dup tok@ 1 or swap tok! ;
+: immediate 1 pick MEM+ 2 + dup ch@ 1 or swap ch! ;
 ' immediate 0 immediate pop pop
 
 : # immediate 10 dp @ scan pop ;
@@ -142,10 +142,10 @@ pop 0 swap ch! pop inp @ dup @ if 1+ inp ! fi ;
 
 # Dictionary layout
 : def>next MEM+ tok@ ;
-: def>flags MEM+ 2 + tok@ ;
-: def>exec MEM+ 1 cells + @ ;
-: def>data MEM+ 2 cells + @ ;
-: def>name MEM+ 3 cells + ;
+: def>flags MEM+ 2 + ch@ ;
+: def>exec MEM+ 3 + ch@ ;
+: def>data MEM+ 4 + @ ;
+: def>name MEM+ 8 + ;
 
 # Reimplementation of immed?
 : immed? def>flags 1 and 0 != ;
@@ -157,16 +157,15 @@ swap def>next od pop 0 ;
 
 # Reimplementation of defword
 : defword # word exec data
-rot MEM+ tuck 2 cells + ! tuck cell+ ! 3 cells + putstr ."  defined" nl ;
+rot MEM+ tuck 4 + ! tuck 3 + ch! 8 + putstr ."  defined" nl ;
 
 : header
 align dp @ MEM -
-dict @ , UNKNOWN , 0 ,
-dup dict ! swap # word string
+dict @ , 0 , dup dict ! swap # word string
 dup dp @ swap strcpy
 strlen dp @ + 1+ dp ! align ;
 
-: moveblock # dest src nbytes
+: moveblock # dest src nbytes -- assume 2-byte units
 do dup while   
   2 - >r tuck r@ + tok@ # src dst x
   over r@ + tok! swap r>
@@ -240,7 +239,7 @@ fi ;
 
 # Top level support
 
-: banner ." NINTH --" MEMEND dp @ - . ."  bytes free" nl ;
+: banner ." NINTH (" MEMEND dp @ - . ." bytes free)" nl ;
 
 : error ." Error: " ;
 
