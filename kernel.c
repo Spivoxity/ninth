@@ -16,6 +16,7 @@ char pad[PAD];
 int dict = -1;
 unsigned state = 0;
 uchar *defbase = NULL;
+int memsize = MEMSIZE;
 
 #define SBASE (MEMSIZE-4)       // One word safety margin for acc
 
@@ -246,15 +247,6 @@ quit:
 
 // Main program
 
-#ifdef BOOT
-#define sym(x) (int) x
-#define heading(next, flags, action) \
-     (next & 0xffff) | (flags << 16) | (action << 24)
-#include "boot.c"
-#else
-#define MAIN find("main")
-#endif
-
 jmp_buf finish;
 
 #ifdef PROF
@@ -271,16 +263,17 @@ void prof_dump(void) {
 #endif
 
 int main(void) {
+     if (! setjmp(finish)) {
 #ifdef BOOT
-     dp = &mem[BOOTMEM * sizeof(unsigned)];
-     memcpy(mem, boot, dp - mem);
-     dict = DICT;
+          dp = &mem[BOOTSIZE];
+          memcpy(mem, boot, BOOTSIZE);
+          dict = DICT;
+          run(def(MAIN));
 #else
-     init_dict();
+          init_dict();
+          run(find("main"));
 #endif
-
-     if (! setjmp(finish))
-          run(MAIN);
+     }
 
 #ifdef PROF
      printf("\nBye (%u ticks)\n", ticks);

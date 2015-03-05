@@ -209,14 +209,14 @@ dict @ do dup 0 >= while 2dup = if 2pop 1 exit fi def>next od 2pop 0 ;
 : seeword # Disassemble word and advance pointer
 dup tok@ 
 dup ['] litstr = if 
-  pop space [char] " putc space 2 + seestr [char] " putc 
+  pop [char] " putc space 2 + seestr [char] " putc space
 else
   dup ['] lit = if 
     pop 2 + dup tok@ .
   else dup ['] branch = over ['] branch0 = or if
-    space def>name putstr 2 + dup tok@ .
+    def>name putstr space 2 + dup tok@ .
   else dup isword if 
-    space def>name putstr 
+    def>name putstr space
   else 
     . 
   fi fi fi
@@ -239,7 +239,7 @@ fi ;
 
 # Top level support
 
-: banner ." NINTH (" MEMEND dp @ - . ." bytes free)" nl ;
+: banner ." NINTH (" MEMSIZE @ MEM+ dp @ - . ." bytes free)" nl ;
 
 : error ." Error: " ;
 

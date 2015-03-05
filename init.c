@@ -86,7 +86,7 @@ void _defvar(char *name, uchar *addr, char *sym) {
      defsym(d, addr, sym);
 }
 
-#define defvar(name, addr) _defvar(name, (uchar *) addr, #addr)
+#define defvar(name, addr) _defvar(name, (uchar *) &addr, #addr)
 
 void defconst(char *name, unsigned val) {
      def *d = create(name);
@@ -157,17 +157,17 @@ PRIMS
      prim_subr("gentok", p_gentok);
      prim_subr("strcmp", p_strcmp);
 
-     defvar("state", &state);
-     defvar("dp", &dp);
-     defvar("tp", &tp);
-     defvar("rp", &rp);
-     defvar("inp", &inp);
-     defvar("base", &defbase);
-     defvar("trace", &trace);
-     defvar("dict", &dict);
-     defvar("pad", &pad);
-     defvar("MEM", mem);
-     defvar("MEMEND", &mem[MEMSIZE]);
+     defvar("state", state);
+     defvar("dp", dp);
+     _defvar("tp", (uchar *) &tp, "dp");
+     defvar("rp", rp);
+     defvar("inp", inp);
+     defvar("base", defbase);
+     defvar("trace", trace);
+     defvar("dict", dict);
+     defvar("pad", pad);
+     _defvar("MEM", mem, "mem");
+     defvar("MEMSIZE", memsize);
 
      defconst("DEFTAG", 16180);
      defconst("ENTER", P_ENTER);

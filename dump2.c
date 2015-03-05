@@ -21,63 +21,60 @@ void dump_mem(void) {
      int n = ndefs-1;
      int k = 0;
 
-     printf("unsigned boot[%d] = {\n", (dp - mem)/4);
+     printf("\t.data\n");
+     printf("boot:\n");
 
      while (p < dp) {
-          printf("/* %4d */ ", p - mem);
-
           if (n >= 0 && p == (uchar *) defs[n]) {
                def *d = (def *) p;
-               printf("heading(%d, %u, %u), ", 
-                      d->d_next, d->d_flags, d->d_action);
+               printf("\t.short %d  /* %s */\n", d->d_next, def_name(d));
+               printf("\t.byte %u, %u\n", d->d_flags, d->d_action);
 
                if (k < nsyms && d == sdefs[k] && d->d_data == addrs[k])
-                    printf("sym(&%s),", syms[k]);
+                    printf("\t.long %s\n", syms[k]);
                else if (d->d_data >= mem && d->d_data < dp)
-                    printf("sym(&mem[%d]),", d->d_data - mem);
+                    printf("\t.long mem+%d\n", d->d_data - mem);
                else if (d->d_data >= tmem && d->d_data < tp)
-                    printf("sym(&rom[%d]),", (d->d_data - tmem)/2);
+                    printf("\t.long rom+%d\n", d->d_data - tmem);
                else
-                    printf("%d,", (int) d->d_data);
+                    printf("\t.long %d\n", (int) d->d_data);
 
                if (d == sdefs[k]) k++;
-
-               printf(" /* %s */\n", def_name(d));
                p += sizeof(def); n--;
           }
           else {
-               printf("%u,\n", * (unsigned *) p);
+               printf("\t.long %u\n", * (unsigned *) p);
                p += sizeof(unsigned);
           }
      }
-
-     printf("};\n\n");
+     printf("bootend:\n\n");
 }
 
 void dump_rom(void) {
      short *p = (short *) tmem;
 
-     printf("#define ROM %d\n\n", (tp - tmem)/2);
-     printf("short rom[ROM] = {\n");
+     printf("\t.data\n");
+     printf("rom:\n");
 
      while (p < (short *) tp) {
-          int n = 0;
-          printf("/* %4d */", p - (short *) tmem); 
+          int n = 1;
+          printf("\t.short %d", *p++);
           while (n++ < 8 && p < (short *) tp)
-               printf(" %d,", *p++);
+               printf(", %d", *p++);
           printf("\n");
      }
 
-     printf("};\n\n");
+     printf("\n");
 }
 
 void dump(void) {
-     printf("// --boot--\n");
-     printf("#include \"ninth.h\"\n");
+     printf("/* --boot-- */\n");
      map_defs();
+     printf("\t.global boot, BOOTSIZE, DICT, MAIN\n\n");
      dump_rom();
      dump_mem();
-     printf("unsigned BOOTSIZE = %d;\n", dp - mem);
-     printf("ushort DICT = %d;\n", dict);
-     printf("ushort MAIN = %d;\n", tok(find("main")));
+     printf("\t.data\n");
+     printf("BOOTSIZE:\n\t.long bootend-boot\n");
+     printf("DICT:\n\t.short %u\n", dict);
+     printf("MAIN:\n\t.short %u\n", tok(find("main")));
 }
