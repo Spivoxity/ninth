@@ -21,7 +21,7 @@ void dump_mem(void) {
      int n = ndefs-1;
      int k = 0;
 
-     printf("unsigned boot[%d] = {\n", (dp - mem)/4);
+     printf("const unsigned boot[%d] = {\n", (dp - mem)/4);
 
      while (p < dp) {
           printf("/* %4d */ ", p - mem);
@@ -58,7 +58,7 @@ void dump_rom(void) {
      short *p = (short *) tmem;
 
      printf("#define ROM %d\n\n", (tp - tmem)/2);
-     printf("short rom[ROM] = {\n");
+     printf("const short rom[ROM] = {\n");
 
      while (p < (short *) tp) {
           int n = 0;
@@ -77,7 +77,7 @@ void dump(void) {
      map_defs();
      dump_rom();
      dump_mem();
-     printf("unsigned BOOTSIZE = %d;\n", dp - mem);
-     printf("ushort DICT = %d;\n", dict);
-     printf("ushort MAIN = %d;\n", tok(find("main")));
+     printf("const unsigned BOOTSIZE = %d;\n", dp - mem);
+     printf("const ushort DICT = %d;\n", dict);
+     printf("const ushort MAIN = %d;\n", tok(find("main")));
 }

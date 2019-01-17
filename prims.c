@@ -9,8 +9,11 @@ void p_accept(void) {
      printf("> "); 
 #endif
      fflush(stdout);
-     if (fgets(inbuf, INBUF, stdin) == NULL)
-          longjmp(finish, 1);
+     if (fgets(inbuf, INBUF, stdin) == NULL) {
+          printf("\nBye\n");
+          exit(0);
+     }
+
      inp = inbuf;
 }
 

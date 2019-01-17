@@ -253,6 +253,8 @@ jmp_buf finish;
 void prof_dump(void) {
      int i;
 
+     printf("(%u ticks)\n", ticks);
+
      for (i = 0; i < MEMSIZE/4; i++) {
           if (prof[i] > 0) {
                def *d = (def *) &mem[4*i];
@@ -263,7 +265,14 @@ void prof_dump(void) {
 #endif
 
 int main(void) {
-     if (! setjmp(finish)) {
+#ifdef DUMP
+     atexit(dump);
+#endif
+
+#ifdef PROF
+     atexit(prof_dump);
+#endif
+
 #ifdef BOOT
           dp = &mem[BOOTSIZE];
           memcpy(mem, boot, BOOTSIZE);
@@ -272,18 +281,6 @@ int main(void) {
 #else
           init_dict();
           run(find("main"));
-#endif
-     }
-
-#ifdef PROF
-     printf("\nBye (%u ticks)\n", ticks);
-     prof_dump();
-#else
-     printf("\nBye\n");
-#endif
-
-#ifdef DUMP
-     dump();
 #endif
 
      return 0;

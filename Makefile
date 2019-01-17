@@ -1,6 +1,6 @@
 all: ninth
 
-CC = gcc
+CC = gcc -m32
 GLOBAL_CFLAGS = -Wall -O2 -fno-strict-aliasing
 CFLAGS = $(GLOBAL_CFLAGS)
 
@@ -17,6 +17,9 @@ kernel.o prims.o: CFLAGS = $(GLOBAL_CFLAGS) -DBOOT
 boot.c: ninthboot system.nth
 	ninthboot <system.nth | sed -f script
 	[ -s $@ ]
+
+%.o: %.s
+	$(CC) $(CFLAGS) -c $< -o $@
 
 boot2.s: ninthboot2 system.nth
 	ninthboot2 <system.nth | sed -f script2
@@ -37,7 +40,8 @@ boot%.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean: force
-	rm -f boot.c ninth ninthboot tmpa $(NINTHBOOT) $(NINTH)
+	rm -f boot.c ninth ninthboot ninth2 ninthboot2 tmpa \
+		$(NINTHBOOT) $(NINTH) $(NINTH2)
 
 force:
 

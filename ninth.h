@@ -46,7 +46,7 @@ extern char *inp;
 typedef struct {
      short d_next;              // Next record in the dictionary
      uchar d_flags;             // Attributes of the word
-     uchar d_action;           // Action when the word is executed
+     uchar d_action;            // Action when the word is executed
      uchar *d_data;             // Pointer to the word's body or data
 } def;
 
@@ -110,13 +110,10 @@ void init_dict(void);
 // dump.c
 void dump(void);
 
-// kernel.c
-extern jmp_buf finish;
-
 // boot.c
-extern unsigned boot[];
-extern unsigned BOOTSIZE;
-extern ushort DICT, MAIN;
+extern const unsigned boot[];
+extern const unsigned BOOTSIZE;
+extern const ushort DICT, MAIN;
 
 #define sym(x) (int) x
 #define heading(next, flags, action) \

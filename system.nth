@@ -137,7 +137,7 @@ tuck do over inp @ ch@ dup
 while
   over ch! 1+ inp inc
 od
-pop 0 swap ch! pop inp @ dup @ if 1+ inp ! fi ;
+pop 0 swap ch! pop inp @ dup ch@ if 1+ inp ! fi ;
   
 
 # Dictionary layout
@@ -187,7 +187,7 @@ find not if
   fi
 fi ;
 
-: isspace dup 10 = swap 32 = or ;
+: isspace 32 <= ;
 
 # Reimplementation of word
 : word
