@@ -149,20 +149,8 @@ void init(void) {
      defconst("VAR", A_VAR);
      defconst("CONST", A_CONST);
 
-     prim_subr(".", p_dot);
-     prim_subr("word", p_word);
-     prim_subr("scan", p_scan);
-     prim_subr("find", p_find);
-     prim_subr("number", p_number);
-     prim_subr("putc", p_putc);
-     prim_subr("create", p_create);
-     prim_subr("defword", p_defword);
-     prim_subr("accept", p_accept);
-     prim_subr("immed?", p_immed);
-     prim_subr("gentok", p_gentok);
-     prim_subr("align", p_align);
-     prim_subr("strcmp", p_strcmp);
-     prim_subr("MEMSIZE", p_memsize);
+#define __SUBR(name, func)  prim_subr(name, func);
+     PRIMS(__SUBR)
 
      // These are defined as NOPs so they can be redefined in system.nth
      prim_action("?colon", A_NOP);

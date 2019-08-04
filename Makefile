@@ -2,7 +2,7 @@ all: ninth
 
 NINTH = kernel.o prims.o boot.o
 ninth: $(NINTH)
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) $^ -lm -o $@
 
 boot.c: ninthboot system.nth script
 	ninthboot <system.nth >tmpa
@@ -11,7 +11,7 @@ boot.c: ninthboot system.nth script
 
 NINTHBOOT = bootkernel.o bootprims.o init.o dump.o
 ninthboot: $(NINTHBOOT)
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) $^ -lm -o $@
 
 init.o dump.o: CFLAGS += -DINIT
 

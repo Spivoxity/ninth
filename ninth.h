@@ -74,6 +74,42 @@ enum {
      ACTIONS(__ENUM, __ENUM0)
 };
 
+/* Primitives implemented as subroutines */
+#define PRIMS(prim) \
+     prim(".", p_dot) \
+     prim("word", p_word) \
+     prim("scan", p_scan) \
+     prim("find", p_find) \
+     prim("number", p_number) \
+     prim("putc", p_putc) \
+     prim("create", p_create) \
+     prim("defword", p_defword) \
+     prim("accept", p_accept) \
+     prim("immed?", p_immed) \
+     prim("gentok", p_gentok) \
+     prim("align", p_align) \
+     prim("strcmp", p_strcmp)   \
+     prim("MEMSIZE", p_memsize) \
+     prim("f+", p_fadd) \
+     prim("f-", p_fsub) \
+     prim("f*", p_fmul) \
+     prim("f/", p_fdiv) \
+     prim("f<", p_fless) \
+     prim("sqrt", p_sqrt) \
+     prim("sin", p_sin) \
+     prim("cos", p_cos) \
+     prim("tan", p_tan) \
+     prim("exp", p_exp) \
+     prim("log", p_log) \
+     prim("f.", p_fdot) \
+     prim("float", p_float) \
+     prim("entier", p_entier) \
+     prim("atan2", p_atan2)
+
+#define __DECL(name, func) \
+     int *func(int *);
+PRIMS(__DECL)
+
 
 /* Global variables */
 #ifndef EXTERN
@@ -110,23 +146,6 @@ void init(void);
 /* dump.c */
 void defsym(def *d, byte *addr, char *sym);
 void dump(void);
-
-/* prims.c */
-int *p_find(int *);
-int *p_dot(int *);
-int *p_scan(int *);
-int *p_word(int *);
-int *p_number(int *);
-int *p_putc(int *);
-int *p_memmove(int *);
-int *p_accept(int *);
-int *p_create(int *);
-int *p_defword(int *);
-int *p_immed(int *);
-int *p_gentok(int *);
-int *p_align(int *sp);
-int *p_strcmp(int *);
-int *p_memsize(int *);
 
 /* boot.c */
 #define sym(x) ((int) x)

@@ -1,4 +1,47 @@
 #include "ninth.h"
+#include "math.h"
+
+#define FLO(a) (* (float *) (a))
+
+#define float_op(name, op) \
+     int *name(int *sp) { \
+          FLO(&sp[1]) = FLO(&sp[1]) op FLO(&sp[0]); \
+          sp++; return sp; \
+     }
+
+float_op(p_fadd, +)
+float_op(p_fsub, -)
+float_op(p_fmul, *)
+float_op(p_fdiv, /)
+
+int *p_fless(int *sp) {
+     sp[1] = (FLO(&sp[1]) < FLO(&sp[0]));
+     sp++; return sp;
+}
+
+#define float_fun(name, fun) \
+     int *name(int *sp) { FLO(sp) = fun(FLO(sp)); return sp; }
+
+float_fun(p_sqrt, sqrtf)
+float_fun(p_sin, sinf)
+float_fun(p_cos, cosf)
+float_fun(p_tan, tanf)
+float_fun(p_exp, expf)
+float_fun(p_log, logf)
+
+int *p_fdot(int *sp) {
+     printf("%f ", FLO(sp++));
+     return sp;
+}
+
+int *p_float(int *sp) { FLO(sp) = (float) sp[0]; return sp; }
+int *p_entier(int *sp) { sp[0] = (int) FLO(sp); return sp; }
+
+int *p_atan2(int *sp) { 
+     FLO(&sp[1]) = atan2f(FLO(&sp[1]), FLO(&sp[0])); 
+     sp++;
+     return sp;
+}
 
 int *p_putc(int *sp) {
      putchar(*sp++);
@@ -26,15 +69,25 @@ int *p_dot(int *sp) {
 
 int *p_number(int *sp) {
      // ( string -- number 1 ) or ( string -- string 0 )
-
      char *end;
-     int n = strtol((char *) *sp, &end, 0);
-     if (*end != '\0')
-          *--sp = 0;
-     else {
+     int n;
+     float f;
+
+     n = strtol((char *) *sp, &end, 0);
+     if (*end == '\0') {
           *sp = n;
           *--sp = 1;
+          return sp;
      }
+
+     f = strtof((char *) *sp, &end);
+     if (*end == '\0') {
+          FLO(sp) = f;
+          *--sp = 1;
+          return sp;
+     }
+     
+     *--sp = 0;
      return sp;
 }
 

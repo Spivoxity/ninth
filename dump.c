@@ -33,9 +33,9 @@ void map_defs(void) {
 }
 
 static const char *act_name[] = {
-#define __name(name, val) #val,
-#define __name0(val) #val,
-     ACTIONS(__name, __name0)
+#define __NAME(name, val) #val,
+#define __NAME0(val) #val,
+     ACTIONS(__NAME, __NAME0)
 };
 
 void dump(void) {
