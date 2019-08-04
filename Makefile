@@ -1,54 +1,31 @@
 all: ninth
 
-CC = gcc -m32
-GLOBAL_CFLAGS = -Wall -O2 -fno-strict-aliasing
-CFLAGS = $(GLOBAL_CFLAGS)
-
 NINTH = kernel.o prims.o boot.o
 ninth: $(NINTH)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) $^ -o $@
 
-NINTH2 = kernel.o prims.o boot2.o
-ninth2: $(NINTH2)
-	$(CC) $(CFLAGS) -o $@ $^
-
-kernel.o prims.o: CFLAGS = $(GLOBAL_CFLAGS) -DBOOT
-
-boot.c: ninthboot system.nth
-	ninthboot <system.nth | sed -f script
-	[ -s $@ ]
-
-%.o: %.s
-	$(CC) $(CFLAGS) -c $< -o $@
-
-boot2.s: ninthboot2 system.nth
-	ninthboot2 <system.nth | sed -f script2
-	[ -s $@ ]
+boot.c: ninthboot system.nth script
+	ninthboot <system.nth >tmpa
+	sed -f script tmpa
+	test -s $@
 
 NINTHBOOT = bootkernel.o bootprims.o init.o dump.o
 ninthboot: $(NINTHBOOT)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) $^ -o $@
 
-NINTHBOOT2 = bootkernel.o bootprims.o init.o dump2.o
-ninthboot2: $(NINTHBOOT2)
-	$(CC) $(CFLAGS) -o $@ $^
-
-bootkernel.o bootprims.o init.o dump.o dump2.o: \
-	CFLAGS = $(GLOBAL_CFLAGS) -DDUMP
+init.o dump.o: CFLAGS += -DINIT
 
 boot%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -DINIT -c $< -o $@
 
 clean: force
-	rm -f boot.c ninth ninthboot ninth2 ninthboot2 tmpa \
-		$(NINTHBOOT) $(NINTH) $(NINTH2)
+	rm -f boot.c ninth ninthboot $(NINTH) $(NINTHBOOT)
 
 force:
 
-.DELETE_ON_ERROR:
+CC = gcc -m32
+CFLAGS = -g -Wall -fno-strict-aliasing
 
 ###
 
 $(NINTH) $(NINTHBOOT): ninth.h
-
-

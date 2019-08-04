@@ -1,83 +1,94 @@
-/* dump.c */
+// dump.c
 
 #include "ninth.h"
 
 #define MAXDEFS 200
+#define MAXSYM 100
 
 def *defs[MAXDEFS];
-int ndefs = 0;
+def *sdefs[MAXSYM];
+void *addrs[MAXSYM];
+char *syms[MAXSYM];
+int nsyms = 0, ndefs;
 
-void map_defs(void) {
-     int d = dict;
-
-     while (d >= 0) {
-          defs[ndefs++] = def(d);
-          d = def(d)->d_next;
-     }
+void defsym(def *d, byte *addr, char *sym) {
+     sdefs[nsyms] = d;
+     addrs[nsyms] = addr;
+     syms[nsyms] = sym;
+     nsyms++;
 }
 
-void dump_mem(void) {
-     uchar *p = mem;
-     int n = ndefs-1;
-     int k = 0;
+void map_defs(void) {
+     int d, n;
 
-     printf("const unsigned boot[%d] = {\n", (dp - mem)/4);
+     ndefs = 0;
+     for (d = dict; d >= 0; d = defn(d)->d_next)
+          ndefs++;
 
+     n = ndefs;
+     for (d = dict; d >= 0; d = defn(d)->d_next)
+          defs[--n] = defn(d);
+
+     assert(n == 0);
+}
+
+static const char *act_name[] = {
+#define __name(name, val) #val,
+#define __name0(val) #val,
+     ACTIONS(__name, __name0)
+};
+
+void dump(void) {
+     int n, k;
+     byte *p;
+
+     printf("// boot.c\n");
+     printf("#include \"ninth.h\"\n\n");
+
+     bp = ALIGN(bp, 4);
+     dp = ALIGN(dp, 4);
+     map_defs();
+
+     printf("static const unsigned rom[] = {\n");
+     n = k = 0; p = dmem;
      while (p < dp) {
-          printf("/* %4d */ ", p - mem);
-
-          if (n >= 0 && p == (uchar *) defs[n]) {
+          printf("/* %4d */ ", (p - dmem)/4);
+          if (n < ndefs && p == (byte *) defs[n]) {
                def *d = (def *) p;
-               printf("heading(%d, %u, %u), ", 
-                      d->d_next, d->d_flags, d->d_action);
+               printf("heading(%d, %u, %s), ",
+                      d->d_next, d->d_flags, act_name[d->d_action]);
 
-               if (k < nsyms && d == sdefs[k] && d->d_data == addrs[k])
+               if (k < nsyms && d->d_data == addrs[k])
                     printf("sym(&%s),", syms[k]);
-               else if (d->d_data >= mem && d->d_data < dp)
-                    printf("sym(&mem[%d]),", d->d_data - mem);
-               else if (d->d_data >= tmem && d->d_data < tp)
-                    printf("sym(&rom[%d]),", (d->d_data - tmem)/2);
+               else if ((byte *) d->d_data >= dmem && (byte *) d->d_data < dp)
+                    assert((unsigned) d->d_data % 4 == 0),
+                    printf("sym(&rom[%d]),", ((byte *) d->d_data - dmem)/4);
                else
                     printf("%d,", (int) d->d_data);
 
-               if (d == sdefs[k]) k++;
-
                printf(" /* %s */\n", def_name(d));
-               p += sizeof(def); n--;
-          }
-          else {
+               if (d == sdefs[k]) k++;
+               p += sizeof(def); n++;
+          } else {
                printf("%u,\n", * (unsigned *) p);
                p += sizeof(unsigned);
           }
      }
-
      printf("};\n\n");
-}
 
-void dump_rom(void) {
-     short *p = (short *) tmem;
+     printf("const unsigned boot[] = {\n");
+     for (unsigned *p = (unsigned *) mem; p < (unsigned *) bp; p++) {
+          unsigned v = *p;
 
-     printf("#define ROM %d\n\n", (tp - tmem)/2);
-     printf("const short rom[ROM] = {\n");
-
-     while (p < (short *) tp) {
-          int n = 0;
-          printf("/* %4d */", p - (short *) tmem); 
-          while (n++ < 8 && p < (short *) tp)
-               printf(" %d,", *p++);
-          printf("\n");
+          if (v % 4 == 0 && v >= (unsigned) dmem && v < (unsigned) dp)
+               printf("     sym(&rom[%d]), /* %s */\n",
+                      ((byte *) v - dmem)/4, def_name((def *) v));
+          else
+               printf("     ?%u?\n", v);
      }
-
      printf("};\n\n");
-}
 
-void dump(void) {
-     printf("// --boot--\n");
-     printf("#include \"ninth.h\"\n");
-     map_defs();
-     dump_rom();
-     dump_mem();
-     printf("const unsigned BOOTSIZE = %d;\n", dp - mem);
-     printf("const ushort DICT = %d;\n", dict);
-     printf("const ushort MAIN = %d;\n", tok(find("main")));
+     printf("int dict = %d;\n", dict);
+     printf("const unsigned BOOTSIZE = %d;\n", bp - mem);
+     printf("const int MAIN = %d;\n", find("main"));
 }

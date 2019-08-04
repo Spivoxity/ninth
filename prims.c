@@ -1,11 +1,12 @@
 #include "ninth.h"
 
-void p_putc(void) {
+int *p_putc(int *sp) {
      putchar(*sp++);
+     return sp;
 }
 
-void p_accept(void) {
-#ifndef DUMP
+int *p_accept(int *sp) {
+#ifndef INIT
      printf("> "); 
 #endif
      fflush(stdout);
@@ -15,13 +16,15 @@ void p_accept(void) {
      }
 
      inp = inbuf;
+     return sp;
 }
 
-void p_dot(void) {
-     printf("%d ", (int) *sp++);
+int *p_dot(int *sp) {
+     printf("%d ", *sp++);
+     return sp;
 }
 
-void p_number(void) {
+int *p_number(int *sp) {
      // ( string -- number 1 ) or ( string -- string 0 )
 
      char *end;
@@ -32,19 +35,27 @@ void p_number(void) {
           *sp = n;
           *--sp = 1;
      }
+     return sp;
 }
 
-void p_strcmp(void) {
+int *p_strcmp(int *sp) {
      sp[1] = strcmp((char *) sp[1], (char *) sp[0]);
      sp++;
+     return sp;
 }
 
-#ifndef BOOT
-void p_immed(void) {
-     sp[0] = ((((def *) &mem[sp[0]])->d_flags & IMMED) != 0);
+int *p_memsize(int *sp) {
+     *--sp = MEMSIZE;
+     return sp;
 }
 
-void p_word(void) {
+#ifdef INIT
+int *p_immed(int *sp) {
+     sp[0] = ((defn(sp[0])->d_flags & IMMED) != 0);
+     return sp;
+}
+
+int *p_word(int *sp) {
      char *p = pad;
 
      while (*inp != '\0' && isspace(*inp)) inp++;
@@ -54,41 +65,50 @@ void p_word(void) {
      *p = '\0';
      
      *--sp = (int) pad;
+     return sp;
 }
 
-void p_gentok(void) {
-     * (short *) tp = *sp++; tp += sizeof(short);
+int *p_gentok(int *sp) {
+     * (short *) dp = *sp++; dp += sizeof(short);
+     return sp;
 }
 
-void p_defword(void) {
-     def *d = (def *) &mem[sp[2]];
-     unsigned action = sp[1];
-     uchar *data = (uchar *) sp[0];
+int *p_align(int *sp) {
+     dp = ALIGN(dp, 4);
+     return sp;
+}
+
+int *p_defword(int *sp) {
+     def *d = defn(sp[2]);
+     int action = sp[1];
+     byte *data = (byte *) sp[0];
      d->d_action = action;
      d->d_data = data;
      sp += 3;
 
      printf("%s defined\n", def_name(d));
+     return sp;
 }
 
-void p_create(void) {
+int *p_create(int *sp) {
      char *name = (char *) sp[0];
-     def *d = create(name);
-     sp[0] = tok(d);
+     sp[0] = create(name);
+     return sp;
 }
 
-void p_find(void) {
+int *p_find(int *sp) {
      // ( string -- def 1 ) or ( string -- string 0 )
-     def *d = find((char *) *sp);
-     if (d == NULL)
+     int d = find((char *) *sp);
+     if (d < 0)
           *--sp = 0;
      else {
-          *sp = (unsigned) tok(d);
+          *sp = d;
           *--sp = 1;
      }
+     return sp;
 }
 
-void p_scan(void) {
+int *p_scan(int *sp) {
      char *base = (char *) sp[0];
      char delim = sp[1];
      char *p = base;
@@ -98,6 +118,7 @@ void p_scan(void) {
      if (*inp != '\0') inp++;
      *p++ = '\0';
      
-     sp[1] = (unsigned) base; sp++;
+     sp[1] = (int) base; sp++;
+     return sp;
 }     
 #endif

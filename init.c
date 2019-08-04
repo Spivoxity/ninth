@@ -1,15 +1,13 @@
-/* init.c */
+// init.c
 
 #include "ninth.h"
 
-// Dictionary
-
 // header -- append dictionary entry
-def *header(char *name) {
+static int header(char *name) {
      def *p;
 
      if (defbase != NULL) {
-          printf("Attempting to create %s in mid-stream\n", name);
+          printf("Creating %s in mid-stream\n", name);
           exit(1);
      }
 
@@ -19,79 +17,72 @@ def *header(char *name) {
 
      p->d_next = dict;
      p->d_flags = 0;
-     p->d_action = P_UNKNOWN;
+     p->d_action = 0;
      p->d_data = NULL;
-     dict = tok(p);
-
      strcpy((char *) dp, name);
-     dp = ALIGN(dp+strlen(name)+1, 4);
+     dp += strlen(name) + 1;
 
-     return p;
+     bp = ALIGN(bp, 4);
+     * (def **) bp = p;
+     dict = (bp - mem)/4;
+     bp += 4;
+     return dict;
 }
 
 // find -- find dictionary entry
-def *find(char *name) {
+int find(char *name) {
      int d = dict;
 
+     // printf("find '%s'\n", name);
+
      while (d >= 0) {
-          if (strcmp(name, def_name(def(d))) == 0)
-               return def(d);
-          d = def(d)->d_next;
+          // printf("  try '%s' (%d)\n", def_name(defn(d)), d);
+          
+          if (strcmp(name, def_name(defn(d))) == 0)
+               return d;
+
+          d = defn(d)->d_next;
      }
 
-     return NULL;
+     // printf("  (not found)\n");
+     return -1;
 }
 
-// create -- find dictionary entry or create if needed
-def *create(char *name) {
-     def *d = find(name);
-     if (d != NULL) return d;
+// create -- find dictionary entry or create one
+int create(char *name) {
+     int d = find(name);
+     if (d >= 0) return d;
      return header(name);
 }
 
-
-// Bootstrap
-
-#define MAXSYM 100
-def *sdefs[MAXSYM];
-uchar *addrs[MAXSYM];
-char *syms[MAXSYM];
-int nsyms = 0;
-
-void defsym(def *d, uchar *addr, char *sym) {
-     sdefs[nsyms] = d;
-     addrs[nsyms] = addr;
-     syms[nsyms] = sym;
-     nsyms++;
+void prim_action(char *name, int action) {
+     int d = create(name);
+     defn(d)->d_action = action;
 }
 
-void primitive(char *name, int token) {
-     def *d = create(name);
-     d->d_action = token;
-}
-
-void _prim_subr(char *name, void (*subr)(void), char *sym) {
-     def *d = create(name);
-     d->d_action = P_CALL;
-     d->d_data = (uchar *) subr;
-     defsym(d, (uchar *) subr, sym);
+void _prim_subr(char *name, int *(*subr)(int *), char *sym) {
+     int d = create(name);
+     defn(d)->d_action = A_CALL;
+     defn(d)->d_data = (byte *) subr;
+     defsym(defn(d), (byte *) subr, sym);
 }
 
 #define prim_subr(name, subr) _prim_subr(name, subr, #subr)
 
-void _defvar(char *name, uchar *addr, char *sym) {
-     def *d = create(name);
-     d->d_action = P_VAR;
-     d->d_data = addr;
-     defsym(d, addr, sym);
+void _defvar(char *name, byte *addr, char *sym) {
+     int d = create(name);
+     defn(d)->d_action = A_VAR;
+     defn(d)->d_data = addr;
+     defsym(defn(d), addr, sym);
 }
 
-#define defvar(name, addr) _defvar(name, (uchar *) &addr, #addr)
+#define defvar(name, addr) _defvar(name, (byte *) &addr, #addr)
 
 void defconst(char *name, unsigned val) {
-     def *d = create(name);
-     d->d_action = P_CONST;
-     d->d_data = dp;
+     int d = create(name);
+     dp = ALIGN(dp, 4);
+     defn(d)->d_action = A_CONST;
+     defn(d)->d_data = dp;
      * (unsigned *) dp = val;
      dp += sizeof(unsigned);
 }
@@ -100,9 +91,7 @@ ushort W(char *name) {
      // Timing matters here: we will evaluate calls to W() before
      // any surrounding call to assemble(), so we need not worry about
      // interfering with a partial definition
-     
-     def *d = create(name);
-     return (uchar *) d - mem;
+     return create(name);
 }
 
 #define L(n) W("lit"), n
@@ -110,39 +99,55 @@ ushort W(char *name) {
 #define END 0xdeadbeef
 
 void assemble(char *name, ...) {
-     def *d = create(name);
-     uchar *base = tp;
+     int d = create(name);
+     byte *base;
      unsigned tok;
      va_list va;
+
+     dp = ALIGN(dp, 4);
+     base = dp;
 
      va_start(va, name);
      while (1) {
           tok = va_arg(va, unsigned);
           if (tok == END) break;
-          * (ushort *) tp = tok;
-          tp += sizeof(ushort);
+          * (ushort *) dp = tok;
+          dp += sizeof(ushort);
      } 
-     * (ushort *) tp = W("e_n_d");
-     tp += sizeof(ushort);
+     * (ushort *) dp = W("e_n_d");
+     dp += sizeof(ushort);
      va_end(va);
 
-     d->d_action = P_ENTER;
-     d->d_data = base;
+     defn(d)->d_action = A_ENTER;
+     defn(d)->d_data = base;
 }
 
 void immediate(char *name) {
-     def *d = create(name);
-     d->d_flags |= IMMED;
+     int d = create(name);
+     defn(d)->d_flags |= IMMED;
 }
 
-void init_dict(void) {
-#undef prim
-#undef prim0
-#define prim(s, p) primitive(s, p);
-#define prim0(p)
-PRIMS
+void init(void) {
+#define action(s, p) prim_action(s, p);
+#define action0(p)
+     ACTIONS(action, action0)
 
-     primitive("exit", P_EXIT);
+     prim_action("exit", A_EXIT);
+
+     defvar("state", state);
+     defvar("bp", bp);
+     defvar("dp", dp);
+     defvar("rp", rp);
+     defvar("inp", inp);
+     defvar("defbase", defbase);
+     defvar("trace", trace);
+     defvar("dict", dict);
+     defvar("pad", pad);
+     defvar("MEM", mem);
+
+     defconst("ENTER", A_ENTER);
+     defconst("VAR", A_VAR);
+     defconst("CONST", A_CONST);
 
      prim_subr(".", p_dot);
      prim_subr("word", p_word);
@@ -155,47 +160,34 @@ PRIMS
      prim_subr("accept", p_accept);
      prim_subr("immed?", p_immed);
      prim_subr("gentok", p_gentok);
+     prim_subr("align", p_align);
      prim_subr("strcmp", p_strcmp);
+     prim_subr("MEMSIZE", p_memsize);
 
-     defvar("state", state);
-     defvar("dp", dp);
-     _defvar("tp", (uchar *) &tp, "dp");
-     defvar("rp", rp);
-     defvar("inp", inp);
-     defvar("base", defbase);
-     defvar("trace", trace);
-     defvar("dict", dict);
-     defvar("pad", pad);
-     _defvar("MEM", mem, "mem");
-     defvar("MEMSIZE", memsize);
-
-     defconst("DEFTAG", 16180);
-     defconst("ENTER", P_ENTER);
-     defconst("VAR", P_VAR);
-     defconst("CONST", P_CONST);
-
-     // These are defined as NOP so they can be redefined in system.nth
-     primitive("?colon", P_NOP);
-     primitive("?comp", P_POP);
-     primitive("banner", P_NOP);
+     // These are defined as NOPs so they can be redefined in system.nth
+     prim_action("?colon", A_NOP);
+     prim_action("?comp", A_POP);
+     prim_action("banner", A_NOP);
 
      // assemble("not", L(0), W("="), END);
      assemble("?tag", W("pop"), W("pop"), END);
 
-     // : : immediate interp 1 state ! word create tp @ base ! DEFTAG ;
+     // : : immediate ?colon 1 state ! word create align dp @ defbase ! ['] : ;
      assemble(":",
               W("?colon"), L(1), W("state"), W("!"), 
-              W("word"), W("create"),
-              W("tp"), W("@"), W("base"), W("!"), W("DEFTAG"), END);
+              W("word"), W("create"), W("align"),
+              W("dp"), W("@"), W("defbase"), W("!"),
+              W("lit"), W(":"), END);
      immediate(":");
 
-     // : ; immediate DEFTAG ?tag quote exit 0 state ! 
-     //    ENTER base @ defword 0 base ! ;
+     // : ; immediate ['] : ?tag quote e_n_d 0 state ! 
+     //    ENTER defbase @ defword 0 defbase ! ;
      assemble(";",
-              W("DEFTAG"), W("?tag"), W("lit"), W("e_n_d"), W("gentok"), 
+              W("lit"), W(":"), W("?tag"),
+              W("lit"), W("e_n_d"), W("gentok"), 
               L(0), W("state"), W("!"),
-              W("ENTER"), W("base"), W("@"), W("defword"), 
-              L(0), W("base"), W("!"), END);
+              W("ENTER"), W("defbase"), W("@"), W("defword"), 
+              L(0), W("defbase"), W("!"), END);
      immediate(";");
 
      // : litnum dup dup 16 lsl 16 asr = if
@@ -234,8 +226,9 @@ PRIMS
               W("interp"), W("branch"), -15,
               W("pop"), END);
 
-     // : main do accept repl od
+     // : main banner 0 state ! do accept repl od
      assemble("main",
-              W("banner"), 
+              W("banner"), L(0), W("state"), W("!"),
               W("accept"), W("repl"), W("branch"), -4, END);
 }
+
