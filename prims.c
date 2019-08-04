@@ -48,14 +48,39 @@ int *p_putc(int *sp) {
      return sp;
 }
 
+FILE *infp = NULL;
+
+int *p_redirect(int *sp) {
+     char *fname = (char *) *sp++;
+
+     infp = fopen(fname, "r");
+     if (infp == NULL) {
+          fprintf(stderr, "%s: cannot open\n", fname);
+          exit(2);
+     }
+
+     return sp;
+}
+
 int *p_accept(int *sp) {
+     FILE *fp = infp;
+
+     if (fp == NULL) {
 #ifndef INIT
-     printf("> "); 
+          printf("> "); 
+          fflush(stdout);
 #endif
-     fflush(stdout);
-     if (fgets(inbuf, INBUF, stdin) == NULL) {
-          printf("\nBye\n");
-          exit(0);
+          fp = stdin;
+     }
+
+     if (fgets(inbuf, INBUF, fp) == NULL) {
+          if (infp != NULL) {
+               fclose(infp);
+               infp = NULL;
+          }
+          
+          inp = NULL;
+          return sp;
      }
 
      inp = inbuf;

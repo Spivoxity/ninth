@@ -64,13 +64,13 @@ void dump(void) {
                     assert((unsigned) d->d_data % 4 == 0),
                     printf("sym(&rom[%d]),", ((byte *) d->d_data - dmem)/4);
                else
-                    printf("%d,", (int) d->d_data);
+                    printf("%#x,", (int) d->d_data);
 
                printf(" /* %s */\n", def_name(d));
                if (d == sdefs[k]) k++;
                p += sizeof(def); n++;
           } else {
-               printf("%u,\n", * (unsigned *) p);
+               printf("%#x,\n", * (unsigned *) p);
                p += sizeof(unsigned);
           }
      }

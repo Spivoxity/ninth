@@ -1,6 +1,6 @@
 all: ninth
 
-NINTH = kernel.o prims.o boot.o
+NINTH = kernel.o prims.o boot.o main.o
 ninth: $(NINTH)
 	$(CC) $(CFLAGS) $^ -lm -o $@
 

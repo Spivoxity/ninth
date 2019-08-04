@@ -144,6 +144,8 @@ void init(void) {
      defvar("dict", dict);
      defvar("pad", pad);
      defvar("MEM", mem);
+     defvar("args", args);
+     defvar("phase", phase);
 
      defconst("ENTER", A_ENTER);
      defconst("VAR", A_VAR);
@@ -214,9 +216,18 @@ void init(void) {
               W("interp"), W("branch"), -15,
               W("pop"), END);
 
-     // : main banner 0 state ! do accept repl od
+     // : main 0 state ! do accept inp @ while repl od
      assemble("main",
-              W("banner"), L(0), W("state"), W("!"),
-              W("accept"), W("repl"), W("branch"), -4, END);
+              L(0), W("state"), W("!"),
+              W("accept"), W("inp"), W("@"),
+              W("branch0"), 3, W("repl"), W("branch"), -8, END);
 }
 
+int main(void) {
+     dict = -1;
+     bp = mem;
+     dp = dmem;
+     init();
+     run(find("main"));
+     dump();
+}

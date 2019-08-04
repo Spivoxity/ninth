@@ -23,7 +23,7 @@ void show_stack(int *sp) {
 #define get(ty) acc = * (ty *) acc
 #define put(ty) * (ty *) acc = sp[1]; sp += 2; acc = *sp
 
-static void run(def *m) {
+void run(int m) {
      int *sp;
      ushort *ip;
      def *w;
@@ -32,7 +32,7 @@ static void run(def *m) {
 quit:
      sp = (int *) &mem[SBASE];
      rp = (unsigned *) &rstack[RSTACK];
-     ip = (ushort *) m->d_data;
+     ip = (ushort *) defn(m)->d_data;
 
      while (1) {
           if ((byte *) sp > &mem[SBASE]) {
@@ -208,21 +208,4 @@ quit:
                goto quit;
           }
      }
-}
-
-int main(void) {
-#ifdef INIT
-     atexit(dump);
-     dict = -1;
-     bp = mem;
-     dp = dmem;
-     init();
-     run(defn(find("main")));
-#else
-     memcpy(mem, boot, BOOTSIZE);
-     dp = &mem[BOOTSIZE];
-     run(defn(MAIN));
-#endif
-
-     return 0;
 }

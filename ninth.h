@@ -84,6 +84,7 @@ enum {
      prim("putc", p_putc) \
      prim("create", p_create) \
      prim("defword", p_defword) \
+     prim("redirect", p_redirect) \
      prim("accept", p_accept) \
      prim("immed?", p_immed) \
      prim("gentok", p_gentok) \
@@ -127,6 +128,8 @@ EXTERN int trace;
 EXTERN char *inp;
 EXTERN int state;
 EXTERN unsigned *rp;
+EXTERN char **args;
+EXTERN int phase;
 
 #ifdef INIT
 extern byte dmem[];
@@ -137,6 +140,9 @@ EXTERN byte *bp;
 
 #define ALIGN(p, n) ((byte *) (((unsigned) (p)+(n)-1) & ~((n)-1)))
 
+
+/* kernel.c */
+void run(int m);
 
 /* init.c */
 int create(char *name);

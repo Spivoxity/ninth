@@ -55,8 +55,8 @@
 
 # HERE gets the value of dp (in the ROM space if bootstrapping)
 : here dp @ ;
-: gentok dp @ dup 2 + dp ! tok! ;
-: , dp @ dup cell+ dp ! ! ;
+: gentok here dup 2 + dp ! tok! ;
+: , here dup cell+ dp ! ! ;
 : constant ' align CONST here defword , ;
 : variable ' align VAR here defword ;
 : allot here + dp ! ;
@@ -76,15 +76,39 @@
 
 : [?comp] immediate quote lit over gentok quote ?comp ;
 
-: if immediate [?comp] branch0> ['] if ;
-: else immediate ['] if ?tag branch> swap >label ['] if ;
-: fi immediate ['] if ?tag >label ;
+: if immediate
+  [?comp]			# Use only in compile state
+  branch0>			# Branch to else or end if test is false
+  ['] if ;			# Push IF as tag for nesting checks
+
+: else immediate
+  ['] if ?tag 			# Check nesting
+  branch> 			# Finish THEN part with branch to end
+  swap >label			# Place label for ELSE part
+  ['] if ;			# Push IF tag again
+
+: fi immediate
+  ['] if ?tag			# Check nesting
+  >label ;			# Place exit label
 
 # : ?dup dup if dup fi ;
 
-: do immediate [?comp] label< 0 ['] do ;
-: while immediate ['] do ?tag pop branch0> ['] do ;
-: od immediate ['] do ?tag swap <branch dup 0 >= if >label fi ;
+: do immediate
+  [?comp]			# Only in compile state
+  label<			# Label for repeat
+  -1			        # Dummy value for loop test
+  ['] do ;			# Push DO as tag for nesting check
+
+: while immediate
+  ['] do ?tag 			# Check nesting
+  pop branch0> 			# Pop dummy and replace with jump
+  ['] do ;			# Push tag again
+
+: od immediate
+  ['] do ?tag			# Check nesting
+  swap <branch			# Branch back to start
+  dup 0 >= if			# Place ending label if needed
+    >label else pop fi ;	
 
 : for immediate [?comp]
   quote swap quote >r label< quote dup quote r@ quote < 
@@ -164,7 +188,7 @@ pop 0 swap ch! pop inp @ dup ch@ if 1+ inp ! fi ;
 
   # Allocate indirect pointer
   bp @ dup cell + bp !
-  dup dp @ swap !
+  dup here swap !
   MEM - 4 / swap
 
   # Lay out the definition
@@ -172,8 +196,8 @@ pop 0 swap ch! pop inp @ dup ch@ if 1+ inp ! fi ;
   0 gentok       # flags
   0 ,            # action
   0 ,            # data
-  dup dp @ swap strcpy  # name
-  strlen dp @ + 1+ 2 aligned dp !
+  dup here swap strcpy  # name
+  strlen here + 1+ 2 aligned dp !
 
   # Set dict
   dup dict ! ;
@@ -193,7 +217,7 @@ find not if
     # The Earth moves ... hold very tight please!
     ." Moving for " dup putstr nl
     dup strlen 1 + cell aligned 16 +	# (name a) where a = Size of header
-    dp @ defbase @ -                    # (name a b) where b = Size of fragment 
+    here defbase @ -                    # (name a b) where b = Size of fragment 
     # Move code fragment from defbase to defbase+a
     over defbase @ tuck +               # (name a b defbase defbase+a)
     swap 2 pick moveblock               # (name a b)
@@ -258,15 +282,37 @@ fi ;
 
 # Top level support
 
-: banner ." NINTH (" MEMSIZE MEM+ dp @ - . ." bytes free)" nl ;
+: banner ." NINTH (" MEMSIZE MEM+ here - . ." bytes free)" nl ;
+
+: ear-loop
+  0 state !
+  do accept inp @ while repl od ;
+
+: readfile
+  dup ." [Reading " putstr ." ]" nl
+  redirect ear-loop ;
+
+: reset # Delete any half-complete definition
+  defbase @ if defbase @ dp ! fi ;
+
+: main
+  reset
+  do
+    phase @ 0 = if
+      -1 phase !  # Any quit will terminate the run
+      args @ cell+ do dup @ ?dup while readfile cell+ od pop
+      1 phase !
+    else phase @ 1 = if
+      banner ear-loop nl ." Bye" nl exit
+    else
+      ." [Aborted]" nl exit
+    fi fi
+  od ;
 
 : error ." Error: " ;
 
 : unknown # Unknown word in outer interpreter
 error putstr ."  is undefined" nl quit ;
-
-: reset # Delete any half-complete definition
-defbase @ if defbase @ dp ! fi quit ;
 
 : ?comp # Called from compile-only words via [?comp]
 state @ if pop else
@@ -274,9 +320,9 @@ state @ if pop else
 fi ;
 
 : ?colon # Called at start of :
-state @ if error ." already in compile state -- maybe missing ;" nl reset fi ;
+state @ if error ." already in compile state -- maybe missing ;" nl fi ;
 
 : ?tag # Check tags for control structure
-depth 2 >= if != else 1 fi if error ." bad nesting" nl reset fi ;
+depth 2 >= if != else 1 fi if error ." bad nesting" nl fi ;
 
 names
