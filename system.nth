@@ -280,7 +280,8 @@ else
   putstr ."  is unknown" nl
 fi ;
 
-# Top level support
+
+# Top level
 
 : banner ." NINTH (" MEMSIZE MEM+ here - . ." bytes free)" nl ;
 

@@ -72,6 +72,7 @@ enum {
 #define __ENUM(s, p) p,
 #define __ENUM0(p) p,
      ACTIONS(__ENUM, __ENUM0)
+     N_ACTIONS
 };
 
 /* Primitives implemented as subroutines */
