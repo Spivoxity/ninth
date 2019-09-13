@@ -83,6 +83,7 @@ int *p_accept(int *sp) {
           return sp;
      }
 
+     printf(">>> %s", inbuf); fflush(stdout);
      inp = inbuf;
      return sp;
 }
@@ -143,11 +144,6 @@ int *p_word(int *sp) {
      *p = '\0';
      
      *--sp = (int) pad;
-     return sp;
-}
-
-int *p_gentok(int *sp) {
-     * (short *) dp = *sp++; dp += sizeof(short);
      return sp;
 }
 

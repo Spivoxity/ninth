@@ -132,8 +132,6 @@ void init(void) {
 #define action0(p)
      ACTIONS(action, action0)
 
-     prim_action("exit", A_EXIT);
-
      defvar("state", state);
      defvar("bp", bp);
      defvar("dp", dp);
@@ -146,6 +144,9 @@ void init(void) {
      defvar("MEM", mem);
      defvar("args", args);
      defvar("phase", phase);
+     defvar("nlocals", nlocals);
+     defvar("locvar", locvar);
+     defvar("locbase", locbase);
 
      defconst("ENTER", A_ENTER);
      defconst("VAR", A_VAR);
@@ -157,25 +158,27 @@ void init(void) {
      // These are defined as NOPs so they can be redefined in system.nth
      prim_action("?colon", A_NOP);
      prim_action("?comp", A_POP);
-     prim_action("banner", A_NOP);
+     prim_action("pop-locals", A_NOP);
+     prim_action("genword", A_GENTOK);
 
      // assemble("not", L(0), W("="), END);
      assemble("?tag", W("pop"), W("pop"), END);
 
-     // : : immediate ?colon 1 state ! word create align dp @ defbase ! ['] : ;
+     // : : immediate ?colon 1 state ! word create align dp @ defbase !
+     //   0 nlocals ! 0 locbase ! ['] : ;
      assemble(":",
               W("?colon"), L(1), W("state"), W("!"), 
               W("word"), W("create"), W("align"),
               W("dp"), W("@"), W("defbase"), W("!"),
+              L(0), W("nlocals"), W("!"), L(0), W("locbase"), W("!"),
               W("lit"), W(":"), END);
      immediate(":");
 
-     // : ; immediate ['] : ?tag quote e_n_d 0 state ! 
-     //    ENTER defbase @ defword 0 defbase ! ;
+     // : ; immediate ['] : ?tag pop-locals 0 gentok 0 state ! 
+     //   ENTER defbase @ defword 0 defbase ! ;
      assemble(";",
-              W("lit"), W(":"), W("?tag"),
-              W("lit"), W("e_n_d"), W("gentok"), 
-              L(0), W("state"), W("!"),
+              W("lit"), W(":"), W("?tag"), W("pop-locals"),
+              L(0), W("gentok"), L(0), W("state"), W("!"),
               W("ENTER"), W("defbase"), W("@"), W("defword"), 
               L(0), W("defbase"), W("!"), END);
      immediate(";");
@@ -184,26 +187,26 @@ void init(void) {
      //    quote lit gentok else quote lit2 dup gentok 16 lsr gentok fi ;
      assemble("litnum", 
               W("dup"), W("dup"), L(16), W("lsl"), L(16), W("asr"),
-              W("="), W("branch0"), 5,
-              W("lit"), W("lit"), W("gentok"), W("gentok"), W("exit"),
+              W("="), W("branch0"), 6,
+              W("lit"), W("lit"), W("gentok"), W("gentok"), W("branch"), 9,
               W("lit"), W("lit2"), W("gentok"), W("dup"), W("gentok"),
               L(16), W("lsr"), W("gentok"), END);
 
-     // : immword dup immed? if execute else gentok fi ;
+     // : immword dup immed? if execute else genword fi ;
      assemble("immword",
-              W("dup"), W("immed?"), W("branch0"), 2,
-              W("execute"), W("exit"), W("gentok"), END);
+              W("dup"), W("immed?"), W("branch0"), 3,
+              W("execute"), W("branch"), 1, W("genword"), END);
 
      // : compile find if immword else number if litnum
      //    else create gentok fi fi ;
      assemble("compile",
-              W("find"), W("branch0"), 2, W("immword"), W("exit"),
-              W("number"), W("branch0"), 2, W("litnum"), W("exit"),
+              W("find"), W("branch0"), 3, W("immword"), W("branch"), 8,
+              W("number"), W("branch0"), 3, W("litnum"), W("branch"), 2,
               W("create"), W("gentok"), END);
 
      // : interp find if execute else number not if unknown fi fi ;
      assemble("interp",
-              W("find"), W("branch0"), 2, W("execute"), W("exit"),
+              W("find"), W("branch0"), 3, W("execute"), W("branch"), 5,
               W("number"), W("not"), W("branch0"), 1,
               W("unknown"), END);
 

@@ -13,7 +13,7 @@ boot.c: ninthboot system.nth script
 	sed -f script tmpa
 	test -s $@
 
-boot.s: boot.c
+%.s: %.c
 	$(CC) $(CFLAGS) -S $<
 
 boot2.s: ninthboot2 system.nth script2
@@ -41,7 +41,7 @@ force:
 
 CC = gcc -m32
 AS = gcc -m32 -c
-CFLAGS = -g -Wall -fno-strict-aliasing
+CFLAGS = -O2 -Wall -fno-strict-aliasing
 
 ###
 

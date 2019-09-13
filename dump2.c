@@ -2,8 +2,8 @@
 
 #include "ninth.h"
 
-#define MAXDEFS 200
-#define MAXSYM 100
+#define MAXDEFS 500
+#define MAXSYM 200
 
 def *defs[MAXDEFS];
 def *sdefs[MAXSYM];
@@ -77,7 +77,6 @@ void dump(void) {
 
                p += sizeof(def);
 
-#if 0
                printf("\t.asciz \"");
                while (*p != '\0') {
                     if (*p == '"')
@@ -90,7 +89,6 @@ void dump(void) {
                printf("\"\n");
                printf("\t.p2align 2\n");
                p = ALIGN(p+1, 4);
-#endif
                
                n++;
                if (d == sdefs[k]) k++;

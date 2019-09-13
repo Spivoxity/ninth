@@ -2,8 +2,8 @@
 
 #include "ninth.h"
 
-#define MAXDEFS 200
-#define MAXSYM 100
+#define MAXDEFS 500
+#define MAXSYM 200
 
 def *defs[MAXDEFS];
 def *sdefs[MAXSYM];
@@ -59,7 +59,7 @@ void dump(void) {
                       d->d_next, d->d_flags, act_name[d->d_action]);
 
                if (k < nsyms && d->d_data == addrs[k])
-                    printf("sym(&%s),", syms[k]);
+                    printf("sym(&%s), /* %d */", syms[k], k);
                else if ((byte *) d->d_data >= dmem && (byte *) d->d_data < dp)
                     assert((unsigned) d->d_data % 4 == 0),
                     printf("sym(&rom[%d]),", ((byte *) d->d_data - dmem)/4);
@@ -76,13 +76,14 @@ void dump(void) {
      }
      printf("};\n\n");
 
+     n = 0;
      printf("const unsigned boot[] = {\n");
      for (unsigned *p = (unsigned *) mem; p < (unsigned *) bp; p++) {
           unsigned v = *p;
 
-          if (v % 4 == 0 && v >= (unsigned) dmem && v < (unsigned) dp)
+          if (n < ndefs && v == (unsigned) defs[n])
                printf("     sym(&rom[%d]), /* %s */\n",
-                      ((byte *) v - dmem)/4, def_name((def *) v));
+                      (v - (unsigned) dmem)/4, def_name(defs[n++]));
           else
                printf("     ?%u?\n", v);
      }

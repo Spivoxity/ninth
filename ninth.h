@@ -64,7 +64,8 @@ typedef struct {
      action("branch", A_BRANCH) action("lit", A_LIT) action("lit2", A_LIT2) \
      action("execute", A_EXECUTE) action0(A_CALL) action0(A_VAR) \
      action0(A_CONST)action("over", A_OVER) action("tuck", A_TUCK) \
-     action("nip", A_NIP) action("not", A_NOT) action("MEM+", A_MEMPLUS)
+     action("nip", A_NIP) action("not", A_NOT) action("MEM+", A_MEMPLUS) \
+     action("gentok", A_GENTOK)
 
 /* The ACTIONS macro is used several times, and here is the first: an
    enumerated type. */
@@ -88,7 +89,6 @@ enum {
      prim("redirect", p_redirect) \
      prim("accept", p_accept) \
      prim("immed?", p_immed) \
-     prim("gentok", p_gentok) \
      prim("align", p_align) \
      prim("strcmp", p_strcmp)   \
      prim("MEMSIZE", p_memsize) \
@@ -131,6 +131,9 @@ EXTERN int state;
 EXTERN unsigned *rp;
 EXTERN char **args;
 EXTERN int phase;
+EXTERN int nlocals;
+EXTERN int locbase;
+extern short locvar[];
 
 #ifdef INIT
 extern byte dmem[];

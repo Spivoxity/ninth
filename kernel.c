@@ -7,6 +7,7 @@ byte mem[MEMSIZE];
 byte *rstack[RSTACK];
 char inbuf[INBUF];
 char pad[PAD];
+short locvar[16];
 
 #ifdef INIT
 byte dmem[MEMSIZE];
@@ -130,11 +131,20 @@ quit:
                break;
 
           case A_ROLL:
-               sp++;
-               if (acc <= 0) { acc = *sp; break; }
-               tmp = sp[acc];
-               while (acc > 0) { sp[acc] = sp[acc-1]; acc--; }
-               acc = tmp;
+               if (acc >= 0) {
+                    sp++;
+                    tmp = sp[acc];
+                    while (acc > 0) { sp[acc] = sp[acc-1]; acc--; }
+                    acc = tmp;
+               } else {
+                    acc = -acc; tmp = 0;
+                    while (tmp <= acc) {
+                         sp[tmp] = sp[tmp+1];
+                         tmp++;
+                    }
+                    sp[acc+1] = sp[0];
+                    acc = *++sp;
+               }
                break;
 
           case A_DEPTH:
@@ -201,6 +211,11 @@ quit:
 
           case A_MEMPLUS:
                acc = (int) &mem[acc];
+               break;
+
+          case A_GENTOK:
+               * (short *) dp = acc; dp += sizeof(short);
+               acc = *++sp;
                break;
 
           default:

@@ -35,8 +35,10 @@
 : != = not ;
 : nl 10 putc ;
 : inc dup @ 1+ swap ! ;
+: dec dup @ 1- swap ! ;
 : 0< 0 < ;
-: negate 0 - ;
+: negate 0 swap - ;
+: fnegate 0.0 swap f- ;
 
 # : xchg # Exchange between stack and memory
 # dup @ -rot ! ;
@@ -50,6 +52,7 @@
 : ['] immediate lit lit gentok ' gentok ;
 : [compile] immediate ' gentok ;
 : quote immediate [compile] ['] ['] gentok gentok ;
+: [lit] quote lit gentok ;
 
 # Storage allocation
 
@@ -74,7 +77,7 @@
 : <branch quote branch offset - 2/ 1- gentok ;
 : label< offset ;
 
-: [?comp] immediate quote lit over gentok quote ?comp ;
+: [?comp] immediate over [lit] quote ?comp ;
 
 : if immediate
   [?comp]			# Use only in compile state
@@ -112,12 +115,16 @@
 
 : for immediate [?comp]
   quote swap quote >r label< quote dup quote r@ quote < 
-  branch0> quote >r ['] for ;
+  branch0> quote >r locbase dup inc inc ['] for ;
 : +repeat immediate ['] for ?tag 
-  swap quote r> quote + <branch >label quote r> quote 2pop ;
-: repeat immediate quote lit 1 gentok [compile] +repeat ;
+  swap quote r> quote + <branch >label quote r> quote 2pop
+  locbase dup dec dec ;
+: repeat immediate 1 [lit] [compile] +repeat ;
 : i rp @ cell+ @ ;
 : j rp @ 3 cells + @ ;
+
+: (exit) r> pop ;
+: exit immediate pop-locals quote (exit) ;
 
 : dump depth do ?dup while dup pick . 1- od nl ;
 : clear do depth while pop od ;
@@ -128,7 +135,7 @@
 
 # Strings
 : char word ch@ ;
-: [char] immediate [?comp] quote lit char gentok ;
+: [char] immediate [?comp] char [lit] ;
 : strlen dup do dup ch@ while 1+ od swap - ;
 
 : strcpy # dest source
@@ -156,23 +163,35 @@ while
 od
 pop 0 swap ch! pop inp @ dup ch@ if 1+ inp ! fi ;
 
-: getdef cells MEM+ @ ;
-
 # Dictionary layout
+: getdef cells MEM+ @ ;
 : tok>next   getdef tok@ ;
 : tok>flags  getdef 2 + tok@ ;
 : tok>action getdef 4 + @ ;
 : tok>data   getdef 8 + @ ;
 : tok>name   getdef 12 + ;
 
+: (is) swap dup tok>action swap tok>data defword ;
+: is ' (is) ;
+
 # Reimplementation of immed?
 : immed? tok>flags 1 and 0 != ;
+
+: (hide) dup tok>flags 2 or swap getdef 2 + tok! ;
+: hide ' (hide) ;
+
+: hidden tok>flags 2 and 0 != ;
 
 # Reimplementation of find
 : find
   dict @
   do dup 0 >= while
-    tuck tok>name over strcmp not if pop 1 exit fi 
+    tuck dup
+    hidden not if
+      tok>name over strcmp not if
+        pop 1 exit
+      fi
+    else pop fi 
     swap tok>next
   od
   pop 0 ;
@@ -197,7 +216,7 @@ pop 0 swap ch! pop inp @ dup ch@ if 1+ inp ! fi ;
   0 ,            # action
   0 ,            # data
   dup here swap strcpy  # name
-  strlen here + 1+ 2 aligned dp !
+  strlen here + 1+ dp !
 
   # Set dict
   dup dict ! ;
@@ -215,7 +234,7 @@ find not if
     header
   else
     # The Earth moves ... hold very tight please!
-    ." Moving for " dup putstr nl
+    # ." Moving for " dup putstr nl
     dup strlen 1 + cell aligned 16 +	# (name a) where a = Size of header
     here defbase @ -                    # (name a b) where b = Size of fragment 
     # Move code fragment from defbase to defbase+a
@@ -230,13 +249,14 @@ find not if
   fi
 fi ;
 
-: isspace 32 <= ;
+: isspace dup 32 <= swap 0 != and ;
+: isnonspace 32 > ;
 
 # Reimplementation of word
 : word
-do inp @ ch@ dup if isspace fi while inp inc od
-pad do inp @ ch@ dup dup if isspace not fi
-while over ch! 1+ inp inc od
+do inp @ ch@ isspace while inp inc od
+pad do inp @ ch@ dup isnonspace while
+  over ch! 1+ inp inc od
 pop 0 swap ch! inp @ ch@ if inp inc fi pad ;
 
 
@@ -269,7 +289,7 @@ fi ;
 : seebody 
 do dup tok@ ['] e_n_d != while seeword od nl pop ;
 
-: see # Disassemble up to exit token
+: see # Disassemble up to e_n_d token
 word find if
   dup tok>action ENTER = if
     tok>data seebody
@@ -279,6 +299,53 @@ word find if
 else
   putstr ."  is unknown" nl
 fi ;
+
+
+# Local variables
+
+# : (locals) ." [" . ." locals]" nl ;
+
+: (locals)
+  # x1 x2 ... xn n
+  r> over 1+
+  # x1 x2 ... xn n ra n+1
+  negate roll
+  # ra x1 x2 ... xn n
+  do ?dup while swap >r 1- od
+  # ra with x1 x2 ... xn on r-stack
+  >r ;
+
+: (pop-locals)
+  r> swap cells rp @ + rp ! >r ;
+  
+: pop-locals
+  nlocals @ 0 > if nlocals @ [lit] quote (pop-locals) fi ;
+
+: local? # tok --> index 1 if tok is a local variable, tok 0 if not
+  >r nlocals @
+  do ?dup while
+    1- dup 2 * locvar + tok@ r@ = if
+      r> pop locbase @ + 1 exit
+    fi
+  od
+  r> 0 ;
+
+: (get-local) 1+ cells rp @ + @ ;
+: (set-local) 1+ cells rp @ + ! ;
+
+: genword
+  local? if [lit] quote (get-local) else gentok fi ;
+
+: -> immediate [?comp]
+  ' local? if
+    [lit] quote (set-local)
+  else
+    error tok>name putstr ." is not a local variable" nl quit
+  fi ;
+
+: { immediate [?comp]
+  do ' dup ['] } != while locvar nlocals @ 2 * + ! nlocals inc od pop
+  nlocals @ [lit] quote (locals) ;
 
 
 # Top level
@@ -324,6 +391,6 @@ fi ;
 state @ if error ." already in compile state -- maybe missing ;" nl fi ;
 
 : ?tag # Check tags for control structure
-depth 2 >= if != else 1 fi if error ." bad nesting" nl fi ;
+depth 2 >= if != else 1 fi if error ." bad nesting" nl quit fi ;
 
 names
