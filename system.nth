@@ -26,7 +26,6 @@
 : cells 4 * ;
 : space 32 putc ;
 : aligned 1- tuck + swap invert and ;
-: align dp @ cell aligned dp ! ;
 : on 1 swap ! ;
 : off 0 swap ! ;
 : > swap < ;
@@ -55,9 +54,8 @@
 : [lit] quote lit gentok ;
 
 # Storage allocation
-
-# HERE gets the value of dp (in the ROM space if bootstrapping)
 : here dp @ ;
+: align dp @ cell aligned dp ! ;
 : gentok here dup 2 + dp ! tok! ;
 : , here dup cell+ dp ! ! ;
 : constant ' align CONST here defword , ;
@@ -196,17 +194,32 @@ pop 0 swap ch! pop inp @ dup ch@ if 1+ inp ! fi ;
   od
   pop 0 ;
 
+: savestr # string -- : save string at HERE
+  here swap strcpy here strlen here + 1+ dp ! ;
+
+: isram # Test if address resides in RAM
+   bp dp != if pop 1 else dup MEM < if pop 0 else MEMSIZE MEM+ < fi fi ;
+
+: clonedef
+  align here swap
+  dup @ , dup 4 + @ , dup 8 + @ , 12 + savestr ;
+
+: dyndef # Get definition and make it dynamic
+  cells MEM+ dup @ dup isram if
+    nip
+  else
+    clonedef tuck swap !
+  fi ;
+
 # Reimplementation of defword
 : defword		# word action data
-  rot getdef tuck	# action def data def
+  rot dyndef tuck	# action def data def
   8 + ! tuck 4 + !      # def
   12 + putstr ."  defined" nl ;
 
 : header # name -- token
-  align
-
   # Allocate indirect pointer
-  bp @ dup cell + bp !
+  align bp @ dup cell + bp !
   dup here swap !
   MEM - 4 / swap
 
@@ -215,8 +228,7 @@ pop 0 swap ch! pop inp @ dup ch@ if 1+ inp ! fi ;
   0 gentok       # flags
   0 ,            # action
   0 ,            # data
-  dup here swap strcpy  # name
-  strlen here + 1+ dp !
+  savestr        # name
 
   # Set dict
   dup dict ! ;
