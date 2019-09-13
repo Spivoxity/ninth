@@ -7,6 +7,8 @@
 #define MEMSIZE 32768
 #define RSTACK 1024
 
+#define SBASE (MEMSIZE-4)
+
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -58,14 +60,13 @@ typedef struct {
      action("ch@", A_CHGET) action("ch!", A_CHPUT) \
      action("tok@", A_TOKGET) action("tok!", A_TOKPUT) \
      action("dup", A_DUP) action("?dup", A_QDUP) action("pick", A_PICK) \
-     action("roll", A_ROLL) action("depth", A_DEPTH) action("pop", A_POP) \
+     action("roll", A_ROLL) action("pop", A_POP) \
      action("swap", A_SWAP) action("r>", A_RPOP) action(">r", A_RPUSH) \
      action("r@", A_RAT) action("rot", A_ROT) action("branch0", A_BRANCH0) \
      action("branch", A_BRANCH) action("lit", A_LIT) action("lit2", A_LIT2) \
      action("execute", A_EXECUTE) action0(A_CALL) action0(A_VAR) \
      action0(A_CONST)action("over", A_OVER) action("tuck", A_TUCK) \
-     action("nip", A_NIP) action("not", A_NOT) action("MEM+", A_MEMPLUS) \
-     action("gentok", A_GENTOK)
+     action("nip", A_NIP) action("not", A_NOT)
 
 /* The ACTIONS macro is used several times, and here is the first: an
    enumerated type. */
@@ -85,12 +86,14 @@ enum {
      prim("number", p_number) \
      prim("putc", p_putc) \
      prim("create", p_create) \
+     prim("gentok", p_gentok) \
      prim("defword", p_defword) \
      prim("redirect", p_redirect) \
      prim("accept", p_accept) \
      prim("immed?", p_immed) \
      prim("align", p_align) \
-     prim("strcmp", p_strcmp)   \
+     prim("strcmp", p_strcmp) \
+     prim("depth", p_depth) \
      prim("MEMSIZE", p_memsize) \
      prim("f+", p_fadd) \
      prim("f-", p_fsub) \

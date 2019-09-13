@@ -159,7 +159,7 @@ void init(void) {
      prim_action("?colon", A_NOP);
      prim_action("?comp", A_POP);
      prim_action("pop-locals", A_NOP);
-     prim_action("genword", A_GENTOK);
+     prim_subr("genword", p_gentok);
 
      // assemble("not", L(0), W("="), END);
      assemble("?tag", W("pop"), W("pop"), END);

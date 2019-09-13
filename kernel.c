@@ -13,8 +13,6 @@ short locvar[16];
 byte dmem[MEMSIZE];
 #endif
 
-#define SBASE (MEMSIZE-4)
-
 void show_stack(int *sp) {
      for (int *p = sp; p < (int *) &mem[SBASE]; p++)
           printf(" %d", *p);
@@ -138,17 +136,10 @@ quit:
                     acc = tmp;
                } else {
                     acc = -acc; tmp = 0;
-                    while (tmp <= acc) {
-                         sp[tmp] = sp[tmp+1];
-                         tmp++;
-                    }
+                    while (tmp <= acc) { sp[tmp] = sp[tmp+1]; tmp++; }
                     sp[acc+1] = sp[0];
                     acc = *++sp;
                }
-               break;
-
-          case A_DEPTH:
-               *sp = acc; acc = (int *) &mem[SBASE] - sp; --sp;
                break;
 
           case A_POP:
@@ -207,15 +198,6 @@ quit:
 
           case A_NOT:
                acc = ! acc;
-               break;
-
-          case A_MEMPLUS:
-               acc = (int) &mem[acc];
-               break;
-
-          case A_GENTOK:
-               * (short *) dp = acc; dp += sizeof(short);
-               acc = *++sp;
                break;
 
           default:

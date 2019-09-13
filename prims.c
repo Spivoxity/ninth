@@ -128,6 +128,12 @@ int *p_memsize(int *sp) {
      return sp;
 }
 
+int *p_depth(int *sp) {
+     int r = (int *) &mem[SBASE] - sp;
+     *--sp = r;
+     return sp;
+}
+
 #ifdef INIT
 int *p_immed(int *sp) {
      sp[0] = ((defn(sp[0])->d_flags & IMMED) != 0);
@@ -149,6 +155,11 @@ int *p_word(int *sp) {
 
 int *p_align(int *sp) {
      dp = ALIGN(dp, 4);
+     return sp;
+}
+
+int *p_gentok(int *sp) {
+     * (short *) dp = *sp++; dp += sizeof(short);
      return sp;
 }
 

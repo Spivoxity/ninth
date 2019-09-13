@@ -1,6 +1,6 @@
 : ' word create ;
 
-: immediate over 4 * MEM+ @ 2 + dup tok@ 1 or swap tok! ;
+: immediate over 4 * MEM + @ 2 + dup tok@ 1 or swap tok! ;
 ' immediate 0 immediate pop pop
 
 : # immediate 10 bp @ scan pop ;
@@ -20,12 +20,14 @@
 : 1+ 1 + ;
 : 1- 1 - ;
 : 2/ 1 asr ;
+: 4/ 2 asr ;
 : cell 4 ;
 : cell+ 4 + ;
 : cell- 4 - ;
 : cells 4 * ;
 : space 32 putc ;
 : aligned 1- tuck + swap invert and ;
+: MEM+ MEM + ;
 : on 1 swap ! ;
 : off 0 swap ! ;
 : > swap < ;
@@ -195,14 +197,14 @@ pop 0 swap ch! pop inp @ dup ch@ if 1+ inp ! fi ;
   pop 0 ;
 
 : savestr # string -- : save string at HERE
-  here swap strcpy here strlen here + 1+ dp ! ;
+  do dup ch@ dup here ch! dp inc while 1+ od pop ;
 
 : isram # Test if address resides in RAM
-   bp dp != if pop 1 else dup MEM < if pop 0 else MEMSIZE MEM+ < fi fi ;
+  bp dp != if pop 1 else dup MEM < if pop 0 else MEMSIZE MEM+ < fi fi ;
 
 : clonedef
   align here swap
-  dup @ , dup 4 + @ , dup 8 + @ , 12 + savestr ;
+  dup @ , cell+ dup @ , cell+ dup @ , cell+ savestr ;
 
 : dyndef # Get definition and make it dynamic
   cells MEM+ dup @ dup isram if
@@ -221,7 +223,7 @@ pop 0 swap ch! pop inp @ dup ch@ if 1+ inp ! fi ;
   # Allocate indirect pointer
   align bp @ dup cell + bp !
   dup here swap !
-  MEM - 4 / swap
+  MEM - 4/ swap
 
   # Lay out the definition
   dict @ gentok  # next
@@ -262,12 +264,12 @@ find not if
 fi ;
 
 : isspace dup 32 <= swap 0 != and ;
-: isnonspace 32 > ;
+: nonspace 32 > ;
 
 # Reimplementation of word
 : word
 do inp @ ch@ isspace while inp inc od
-pad do inp @ ch@ dup isnonspace while
+pad do inp @ ch@ dup nonspace while
   over ch! 1+ inp inc od
 pop 0 swap ch! inp @ ch@ if inp inc fi pad ;
 
