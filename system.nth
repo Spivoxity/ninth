@@ -64,6 +64,17 @@
 : variable ' align VAR here defword ;
 : allot here + dp ! ;
 
+# Dictionary layout
+: getdef cells MEM+ @ ;
+: tok>next   getdef tok@ ;
+: tok>flags  getdef 2 + tok@ ;
+: tok>action getdef 4 + @ ;
+: tok>data   getdef 8 + @ ;
+: tok>name   getdef 12 + ;
+
+: (is) swap dup tok>action swap tok>data defword ;
+: is ' (is) ;
+
 # Control structures
 
 # Label values are relative to defbase to allow for the earth moving
@@ -137,14 +148,6 @@
 : char word ch@ ;
 : [char] immediate [?comp] char [lit] ;
 : strlen dup do dup ch@ while 1+ od swap - ;
-
-: strcpy # dest source
-do 2dup ch@ tuck swap ch! while 1+ swap 1+ swap od 2pop ;
-
-# : strcmp
-# do tuck ch@ dup if over ch@ swap - dup not
-# else pop dup ch@ 0 fi while pop 1+ swap 1+ od nip nip ;
-
 : putstr do dup ch@ ?dup while putc 1+ od pop ;
 : litstr r> dup 2 + swap tok@ over + >r ;
 
@@ -154,6 +157,7 @@ strlen 1+ 2 aligned dup here 2 - tok! here + dp ! ;
 
 : ." immediate [compile] " quote putstr ;
 
+
 # Reimplementation of scan
 : scan # delim base
 tuck do over inp @ ch@ dup 
@@ -162,17 +166,6 @@ while
   over ch! 1+ inp inc
 od
 pop 0 swap ch! pop inp @ dup ch@ if 1+ inp ! fi ;
-
-# Dictionary layout
-: getdef cells MEM+ @ ;
-: tok>next   getdef tok@ ;
-: tok>flags  getdef 2 + tok@ ;
-: tok>action getdef 4 + @ ;
-: tok>data   getdef 8 + @ ;
-: tok>name   getdef 12 + ;
-
-: (is) swap dup tok>action swap tok>data defword ;
-: is ' (is) ;
 
 # Reimplementation of immed?
 : immed? tok>flags 1 and 0 != ;
@@ -244,22 +237,21 @@ od pop 2pop ;
 # Reimplementation of create
 : create
 find not if 
-  defbase @ not if
+  origin not if
     header
   else
     # The Earth moves ... hold very tight please!
-    # ." Moving for " dup putstr nl
-    dup strlen 1 + cell aligned 16 +	# (name a) where a = Size of header
-    here defbase @ -                    # (name a b) where b = Size of fragment 
-    # Move code fragment from defbase to defbase+a
-    over defbase @ tuck +               # (name a b defbase defbase+a)
-    swap 2 pick moveblock               # (name a b)
+    dup >r                              # Save name for later (: name)
+    here origin - >r                    # Save b = Size of fragment
+    strlen 1 + cell aligned 12 +	# Calc a = Size of header
+    bp dp = if 4 + fi
+    origin tuck + dup defbase !         # Reset origin (O O+a : b name)
+    # Move code fragment from O to O+a
+    over r@ moveblock                   # (O : b name)
     # Fake dp value and create header
-    defbase @ dp !
-    rot header -rot                     # (tok a b)
-    # Reset defbase and restore dp
-    swap defbase @ +                    # (tok b defbase+a)
-    dup defbase ! + dp !                # (tok)
+    dp ! r> r> header swap              # (tok b)
+    # Reset dp
+    origin + dp !
   fi
 fi ;
 
@@ -272,6 +264,49 @@ do inp @ ch@ isspace while inp inc od
 pad do inp @ ch@ dup nonspace while
   over ch! 1+ inp inc od
 pop 0 swap ch! inp @ ch@ if inp inc fi pad ;
+
+
+# Local variables
+
+: (locals) 			# (x1 x2 ... xn n)
+  r> over 1+			# (x1 x2 ... xn n ra n+1)
+  negate roll			# (ra x1 x2 ... xn n)
+  do ?dup while swap >r 1- od   # (ra : x1 x2 ... xn)
+  >r ;                          # (: ra x1 x2 ... xn)
+
+: (pop-locals)
+  r> swap cells rp @ + rp ! >r ;
+  
+: pop-locals
+  nlocals @ ?dup if [lit] quote (pop-locals) fi ;
+
+: local? # tok --> index 1 if tok is a local variable, tok 0 if not
+  >r nlocals @
+  do ?dup while
+    1- dup 2 * locvar + tok@ r@ = if
+      r> pop locbase @ + 1 exit
+    fi
+  od
+  r> 0 ;
+
+: (get-local) 1+ cells rp @ + @ ;
+: (set-local) 1+ cells rp @ + ! ;
+
+: genword
+  local? if [lit] quote (get-local) else gentok fi ;
+
+: error ." Error: " ;
+
+: -> immediate [?comp]
+  ' local? if
+    [lit] quote (set-local)
+  else
+    error tok>name putstr ." is not a local variable" nl quit
+  fi ;
+
+: { immediate [?comp]
+  do ' dup ['] } != while locvar nlocals @ 2 * + ! nlocals inc od pop
+  nlocals @ [lit] quote (locals) ;
 
 
 # Disassembler
@@ -315,53 +350,6 @@ else
 fi ;
 
 
-# Local variables
-
-# : (locals) ." [" . ." locals]" nl ;
-
-: (locals)
-  # x1 x2 ... xn n
-  r> over 1+
-  # x1 x2 ... xn n ra n+1
-  negate roll
-  # ra x1 x2 ... xn n
-  do ?dup while swap >r 1- od
-  # ra with x1 x2 ... xn on r-stack
-  >r ;
-
-: (pop-locals)
-  r> swap cells rp @ + rp ! >r ;
-  
-: pop-locals
-  nlocals @ 0 > if nlocals @ [lit] quote (pop-locals) fi ;
-
-: local? # tok --> index 1 if tok is a local variable, tok 0 if not
-  >r nlocals @
-  do ?dup while
-    1- dup 2 * locvar + tok@ r@ = if
-      r> pop locbase @ + 1 exit
-    fi
-  od
-  r> 0 ;
-
-: (get-local) 1+ cells rp @ + @ ;
-: (set-local) 1+ cells rp @ + ! ;
-
-: genword
-  local? if [lit] quote (get-local) else gentok fi ;
-
-: -> immediate [?comp]
-  ' local? if
-    [lit] quote (set-local)
-  else
-    error tok>name putstr ." is not a local variable" nl quit
-  fi ;
-
-: { immediate [?comp]
-  do ' dup ['] } != while locvar nlocals @ 2 * + ! nlocals inc od pop
-  nlocals @ [lit] quote (locals) ;
-
-
 # Top level
 
 : banner ." NINTH (" MEMSIZE MEM+ here - . ." bytes free)" nl ;
@@ -375,7 +363,7 @@ fi ;
   redirect ear-loop ;
 
 : reset # Delete any half-complete definition
-  defbase @ if defbase @ dp ! fi ;
+  origin if origin dp ! fi ;
 
 : main
   reset
@@ -390,8 +378,6 @@ fi ;
       ." [Aborted]" nl exit
     fi fi
   od ;
-
-: error ." Error: " ;
 
 : unknown # Unknown word in outer interpreter
 error putstr ."  is undefined" nl quit ;
