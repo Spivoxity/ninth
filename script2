@@ -1,0 +1,4 @@
+/boot\.s/,${
+w boot2.s
+d
+}

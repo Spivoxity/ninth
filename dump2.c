@@ -44,9 +44,10 @@ void dump(void) {
 
      printf("# boot.s\n\n");
 
+     printf("\t.ifdef PORTABLE\n");
      for (int i = 0; i < N_ACTIONS; i++)
           printf("\t.equ %s, %d\n", act_name[i], i);
-     printf("\n");
+     printf("\t.endif\n\n");
 
      printf("\t.equ bp, dp\n\n");
 

@@ -1,0 +1,1 @@
+: fac ?dup if dup 1- fac * else 1 fi ;

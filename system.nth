@@ -1,10 +1,11 @@
+: # 10 bp @ scan pop ;
+# Now we can write comments like this
+
 : ' word create ;
 
 : immediate over 4 * MEM + @ 2 + dup tok@ 1 or swap tok! ;
 ' immediate 0 immediate pop pop
-
-: # immediate 10 bp @ scan pop ;
-# Now we can write comments like this
+' # 0 immediate pop pop
 
 # Stack manipulations
 # : rot 2 roll ;
@@ -30,6 +31,7 @@
 : MEM+ MEM + ;
 : on 1 swap ! ;
 : off 0 swap ! ;
+: not 0 = ;
 : > swap < ;
 : <= swap < not ;
 : >= < not ;
@@ -150,13 +152,13 @@
 : strlen dup do dup ch@ while 1+ od swap - ;
 : putstr do dup ch@ ?dup while putc 1+ od pop ;
 : litstr r> dup 2 + swap tok@ over + >r ;
+: puttok tok>name putstr ;
 
 : " immediate
 [?comp] quote litstr 0 gentok [char] " here scan 
 strlen 1+ 2 aligned dup here 2 - tok! here + dp ! ;
 
-: ." immediate [compile] " quote putstr ;
-
+: ." immediate [?comp] [compile] " quote putstr ;
 
 # Reimplementation of scan
 : scan # delim base
@@ -193,7 +195,7 @@ pop 0 swap ch! pop inp @ dup ch@ if 1+ inp ! fi ;
   do dup ch@ dup here ch! dp inc while 1+ od pop ;
 
 : isram # Test if address resides in RAM
-  bp dp != if pop 1 else dup MEM < if pop 0 else MEMSIZE MEM+ < fi fi ;
+  bp dp != if pop 1 else MEM - MEMSIZE u< fi ;
 
 : clonedef
   align here swap
@@ -260,18 +262,26 @@ fi ;
 
 # Reimplementation of word
 : word
-do inp @ ch@ isspace while inp inc od
-pad do inp @ ch@ dup nonspace while
-  over ch! 1+ inp inc od
-pop 0 swap ch! inp @ ch@ if inp inc fi pad ;
+  # Skip initial spaces
+  do inp @ ch@ isspace while inp inc od
+  # Copy to the pad a sequence of non-spaces (possibly empty)
+  pad do inp @ ch@ dup nonspace while
+    over ch! 1+ inp inc od pop
+  # Terminate with a null
+  0 swap ch!
+  # Skip one trailing space
+  inp @ ch@ if inp inc fi
+  # Return the string on the pad
+  pad ;
 
+# Fix ' to read a new line when needed
+: ' do word dup ch@ 0 = while pop accept od create ;
 
 # Local variables
 
 : (locals) 			# (x1 x2 ... xn n)
-  r> over 1+			# (x1 x2 ... xn n ra n+1)
-  negate roll			# (ra x1 x2 ... xn n)
-  do ?dup while swap >r 1- od   # (ra : x1 x2 ... xn)
+  r> swap                       # (x1 x2 ... x[k] ra k : x[k+1] ... x[n])
+  do dup while rot >r 1- od pop
   >r ;                          # (: ra x1 x2 ... xn)
 
 : (pop-locals)
@@ -290,10 +300,23 @@ pop 0 swap ch! inp @ ch@ if inp inc fi pad ;
   r> 0 ;
 
 : (get-local) 1+ cells rp @ + @ ;
+: (local-0) rp @ cell + @ ;
+: (local-1) rp @ 2 cells + @ ;
+: (local-2) rp @ 3 cells + @ ;
 : (set-local) 1+ cells rp @ + ! ;
 
 : genword
-  local? if [lit] quote (get-local) else gentok fi ;
+  local? if
+    dup 0 = if
+      pop quote (local-0)
+    else dup 1 = if
+      pop quote (local-1)
+    else dup 2 = if
+      pop quote (local-2)
+    else
+      [lit] quote (get-local)
+    fi fi fi
+  else gentok fi ;
 
 : error ." Error: " ;
 
@@ -301,7 +324,7 @@ pop 0 swap ch! inp @ ch@ if inp inc fi pad ;
   ' local? if
     [lit] quote (set-local)
   else
-    error tok>name putstr ." is not a local variable" nl quit
+    error puttok ." is not a local variable" nl quit
   fi ;
 
 : { immediate [?comp]
@@ -311,7 +334,7 @@ pop 0 swap ch! inp @ ch@ if inp inc fi pad ;
 
 # Disassembler
 : names 
-dict @ do dup 0 >= while dup space tok>name putstr tok>next od pop nl ;
+dict @ do dup 0 >= while dup space puttok tok>next od pop nl ;
 
 : isword # Test if token is in the dictionary
 dict @ do dup 0 >= while 2dup = if 2pop 1 exit fi tok>next od 2pop 0 ;
@@ -319,21 +342,21 @@ dict @ do dup 0 >= while 2dup = if 2pop 1 exit fi tok>next od 2pop 0 ;
 : seestr dup tok@ swap 2 + tuck + swap putstr ;
 
 : seeword # Disassemble word and advance pointer
-dup tok@ 
-dup ['] litstr = if 
-  pop [char] " putc space 2 + seestr [char] " putc space
-else
-  dup ['] lit = if 
-    putc 2 + dup tok@ .
-  else dup ['] branch = over ['] branch0 = or if
-    tok>name putstr space 2 + dup tok@ .
-  else dup isword if 
-    tok>name putstr space
-  else 
-    . 
-  fi fi fi
-  2 + 
-fi ;
+  dup tok@
+  dup ['] litstr = if 
+    pop [char] " putc space 2 + seestr [char] " putc space
+  else
+    dup ['] lit = if 
+      pop [char] # putc 2 + dup tok@ .
+    else dup ['] lit2 = if
+      pop [char] # putc 2 + dup tok@ swap 2 + tuck tok@ 16 lsl + .
+    else dup ['] branch = over ['] branch0 = or if
+      puttok space 2 + dup tok@ .
+    else dup isword if 
+      puttok space
+    else . fi fi fi fi
+    2 + 
+  fi ;
 
 : seebody 
 do dup tok@ ['] e_n_d != while seeword od nl pop ;
@@ -343,7 +366,7 @@ word find if
   dup tok>action ENTER = if
     tok>data seebody
   else
-    tok>name putstr ."  has no mortal body" nl
+    puttok ."  has no mortal body" nl
   fi
 else
   putstr ."  is unknown" nl
@@ -363,7 +386,7 @@ fi ;
   redirect ear-loop ;
 
 : reset # Delete any half-complete definition
-  origin if origin dp ! fi ;
+  origin if origin dp ! 0 defbase ! fi ;
 
 : main
   reset
@@ -384,7 +407,7 @@ error putstr ."  is undefined" nl quit ;
 
 : ?comp # Called from compile-only words via [?comp]
 state @ if pop else
-  error tok>name putstr ."  is a compile-only word" nl quit 
+  error puttok ."  is a compile-only word" nl quit 
 fi ;
 
 : ?colon # Called at start of :

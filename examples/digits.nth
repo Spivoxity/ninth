@@ -1,0 +1,31 @@
+: set # a b -- range [a..b)
+  -1 swap lsl invert swap -1 swap lsl and ;
+
+1 10 set constant all
+
+: digits 0 0 all search ;
+
+: member # set x
+  1 swap lsl and ;
+
+: delete # set x
+  1 swap lsl invert and ;
+
+: search # k n s
+  2 pick 9 = if
+    over . nl
+  else
+    10 1 for
+      dup i member if
+        2 pick 1+ 
+        2 pick 10 * i +
+        2dup swap mod 0 = if
+          2 pick i delete
+          search
+        else
+          2pop
+        fi
+      fi
+    repeat
+  fi 2pop pop ;
+

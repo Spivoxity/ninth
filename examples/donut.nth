@@ -1,0 +1,2 @@
+: donut 11 -10 for 21 -20 for j 2 * i symbol repeat nl repeat ;
+: symbol dup * swap dup * + 80 - 340 u< " .*" + ch@ putc ;

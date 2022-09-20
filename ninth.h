@@ -33,10 +33,10 @@ typedef struct {
    a despatch table of assembly-language routines, or the address of
    such a routine. */
 
-/* A 'token' is a 16-bit index into the 'mem' array, leading to
+/* A 'token' is a 16-bit index into the 'mem' array, leading to a
    pointer to the definition of a word; the definition itself can live
    outside the 'mem' array, e.g. in ROM.  Because pointers must be
-   4-bit aligned, we can scale the index appropriately. */
+   4-byte aligned, we can scale the index appropriately. */
 #define defn(t)  ((def **) mem)[t]
 
 /* The name of a word, given its definition */
@@ -51,8 +51,11 @@ typedef struct {
    so that it corresponds to token 0. */
 #define ACTIONS(action, action0) \
      action0(A_UNKNOWN) action("e_n_d", A_EXIT) action0(A_NOP) \
-     action("quit", A_QUIT) action0(A_ENTER) action("+", A_ADD) \
-     action("-", A_SUB) action("*", A_MUL) action("/", A_DIV) \
+     action("quit", A_QUIT) action0(A_ENTER) \
+     action("0", A_ZERO) action("1", A_ONE) action("2", A_TWO) \
+     action("3", A_THREE) action("4", A_FOUR) \
+     action("+", A_ADD) action("-", A_SUB) \
+     action("*", A_MUL) action("/", A_DIV)                 \
      action("mod", A_MOD) action("=", A_EQ) action("<", A_LESS) \
      action("u<", A_ULESS) action("and", A_AND) action("lsl", A_LSL) \
      action("lsr", A_LSR) action("asr", A_ASR) action("or", A_OR) \
@@ -65,8 +68,8 @@ typedef struct {
      action("r@", A_RAT) action("rot", A_ROT) action("branch0", A_BRANCH0) \
      action("branch", A_BRANCH) action("lit", A_LIT) action("lit2", A_LIT2) \
      action("execute", A_EXECUTE) action0(A_CALL) action0(A_VAR) \
-     action0(A_CONST)action("over", A_OVER) action("tuck", A_TUCK) \
-     action("nip", A_NIP) action("not", A_NOT)
+     action0(A_CONST) action("over", A_OVER) action("tuck", A_TUCK) \
+     action("nip", A_NIP)
 
 /* The ACTIONS macro is used several times, and here is the first: an
    enumerated type. */
@@ -127,7 +130,7 @@ extern char pad[];
 
 EXTERN byte *defbase;
 EXTERN byte *dp;
-EXTERN int dict;
+extern int dict;
 EXTERN int trace;
 EXTERN char *inp;
 EXTERN int state;

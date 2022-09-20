@@ -1,0 +1,31 @@
+: set { a b } # range [a..b)
+  -1 a lsl -1 b lsl invert and ;
+
+1 10 set constant all
+
+: digits 0 0 all search ;
+
+: member { set x }
+  1 x lsl set and ;
+
+: delete { set x }
+  1 x lsl invert set and ;
+
+: search { k n s }
+  # k . n . s . nl
+  k 9 = if
+    n . nl
+  else
+    k 1+ -> k
+    10 1 for
+      s i member if
+        n 10 * i +  
+        dup k mod 0 = if
+          k swap s i delete search
+        else
+          pop
+        fi
+      fi
+    repeat
+  fi ;
+

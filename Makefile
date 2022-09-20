@@ -21,6 +21,9 @@ boot2.s: ninthboot2 system.nth script2
 	sed -f script2 tmpa
 	test -s $@
 
+boot2.o: boot2.s
+	as --32 -defsym PORTABLE=1 $< -o $@
+
 NINTHBOOT = bootkernel.o bootprims.o init.o dump.o
 ninthboot: $(NINTHBOOT)
 	$(CC) $(CFLAGS) $^ -lm -o $@
@@ -36,13 +39,14 @@ boot%.o: %.c
 
 clean: force
 	rm -f boot.c ninth ninthboot $(NINTH) $(NINTHBOOT)
+	rm -f boot2.c ninth2 ninthboot2 $(NINTH2) $(NINTHBOOT2)
 
 force:
 
 CC = gcc -m32
 AS = gcc -m32 -c
-CFLAGS = -O2 -Wall -fno-strict-aliasing
+CFLAGS = -O2 -Wall -fno-strict-aliasing -no-pie
 
 ###
 
-$(NINTH) $(NINTHBOOT): ninth.h
+$(NINTH) $(NINTHBOOT) $(NINTH2) $(NINTHBOOT2): ninth.h

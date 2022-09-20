@@ -1,0 +1,16 @@
+: foo caller ;
+
+: caller r@ findword ;
+
+: findword # Print the word containing a return address
+0 dict @ do 
+  dup 0 >= 
+while 
+  # addr best def
+  dup def>exec ENTER =      # addr best def flag
+  over def>data 4 pick < and
+  over def>data 3 pick def>data > and if
+    swap pop dup
+  fi
+  def>next
+od pop nip def>name putstr nl ;

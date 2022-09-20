@@ -2,6 +2,8 @@
 
 #include "ninth.h"
 
+int dict;
+
 // header -- append dictionary entry
 static int header(char *name) {
      def *p;
@@ -31,20 +33,11 @@ static int header(char *name) {
 
 // find -- find dictionary entry
 int find(char *name) {
-     int d = dict;
-
-     // printf("find '%s'\n", name);
-
-     while (d >= 0) {
-          // printf("  try '%s' (%d)\n", def_name(defn(d)), d);
-          
+     for (int d = dict; d >= 0; d = defn(d)->d_next) {
           if (strcmp(name, def_name(defn(d))) == 0)
                return d;
-
-          d = defn(d)->d_next;
      }
 
-     // printf("  (not found)\n");
      return -1;
 }
 
@@ -160,17 +153,15 @@ void init(void) {
      prim_action("?comp", A_POP);
      prim_action("pop-locals", A_NOP);
      prim_subr("genword", p_gentok);
-
-     // assemble("not", L(0), W("="), END);
      assemble("?tag", W("pop"), W("pop"), END);
 
      // : : immediate ?colon 1 state ! word create align dp @ defbase !
      //   0 nlocals ! 0 locbase ! ['] : ;
      assemble(":",
-              W("?colon"), L(1), W("state"), W("!"), 
+              W("?colon"), W("1"), W("state"), W("!"), 
               W("word"), W("create"), W("align"),
               W("dp"), W("@"), W("defbase"), W("!"),
-              L(0), W("nlocals"), W("!"), L(0), W("locbase"), W("!"),
+              W("0"), W("nlocals"), W("!"), W("0"), W("locbase"), W("!"),
               W("lit"), W(":"), END);
      immediate(":");
 
@@ -178,9 +169,9 @@ void init(void) {
      //   ENTER defbase @ defword 0 defbase ! ;
      assemble(";",
               W("lit"), W(":"), W("?tag"), W("pop-locals"),
-              L(0), W("gentok"), L(0), W("state"), W("!"),
+              W("0"), W("gentok"), W("0"), W("state"), W("!"),
               W("ENTER"), W("defbase"), W("@"), W("defword"), 
-              L(0), W("defbase"), W("!"), END);
+              W("0"), W("defbase"), W("!"), END);
      immediate(";");
 
      // : litnum dup dup 16 lsl 16 asr = if
@@ -204,10 +195,10 @@ void init(void) {
               W("number"), W("branch0"), 3, W("litnum"), W("branch"), 2,
               W("create"), W("gentok"), END);
 
-     // : interp find if execute else number not if unknown fi fi ;
+     // : interp find if execute else number if else unknown fi fi ;
      assemble("interp",
-              W("find"), W("branch0"), 3, W("execute"), W("branch"), 5,
-              W("number"), W("not"), W("branch0"), 1,
+              W("find"), W("branch0"), 3, W("execute"), W("branch"), 6,
+              W("number"), W("branch0"), 2, W("branch"), 1,
               W("unknown"), END);
 
      // : repl do word dup ch@ while 
@@ -221,7 +212,7 @@ void init(void) {
 
      // : main 0 state ! do accept inp @ while repl od
      assemble("main",
-              L(0), W("state"), W("!"),
+              W("0"), W("state"), W("!"),
               W("accept"), W("inp"), W("@"),
               W("branch0"), 3, W("repl"), W("branch"), -8, END);
 }

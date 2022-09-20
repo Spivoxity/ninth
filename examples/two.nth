@@ -1,0 +1,1 @@
+: two ?dup if 1- dup two swap two + else 1 fi ;

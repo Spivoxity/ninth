@@ -1,0 +1,5 @@
+: tr tuck - dup 26 u< if 13 + 26 mod fi + ;
+: rot13c [char] A tr [char] a tr ;
+: rot13 dup do dup ch@ ?dup while rot13c over ch! 1+ od pop ;
+: code 10 here scan rot13 putstr nl ;
+code The flowers that bloom in the Spring

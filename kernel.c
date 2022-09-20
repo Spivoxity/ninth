@@ -18,6 +18,7 @@ void show_stack(int *sp) {
           printf(" %d", *p);
 }
 
+#define push(val) *sp-- = acc; acc = val
 #define binary(w) acc = sp[1] w acc; sp++
 #define get(ty) acc = * (ty *) acc
 #define put(ty) * (ty *) acc = sp[1]; sp += 2; acc = *sp
@@ -80,6 +81,11 @@ quit:
                acc = *sp;
                break;
 
+          case A_ZERO: push(0); break;
+          case A_ONE: push(1); break;
+          case A_TWO: push(2); break;
+          case A_THREE: push(3); break;
+          case A_FOUR: push(4); break;
           case A_ADD: binary(+); break;
           case A_SUB: binary(-); break;
           case A_MUL: binary(*); break;
@@ -159,7 +165,7 @@ quit:
                break;
 
           case A_RPOP:
-               *sp = acc; acc = *rp++; sp--;
+               push(*rp++);
                break;
 
           case A_RPUSH:
@@ -167,7 +173,7 @@ quit:
                break;
 
           case A_RAT:
-               *sp-- = acc; acc = *rp;
+               push(*rp);
                break;
 
           case A_BRANCH0:
@@ -181,27 +187,24 @@ quit:
                break;
 
           case A_LIT:
-               *sp-- = acc; acc = (signed short) *ip++;
+               push((signed short) *ip++);
                break;
 
           case A_LIT2:
-               *sp-- = acc; acc = (ip[1] << 16) + ip[0]; ip += 2;
+               push((ip[1] << 16) + ip[0]); ip += 2;
                break;
 
           case A_VAR:
-               *sp-- = acc; acc = (int) w->d_data;
+               push((int) w->d_data);
                break;
 
           case A_CONST:
-               *sp-- = acc; acc = * (int *) w->d_data;
-               break;
-
-          case A_NOT:
-               acc = ! acc;
+               push(* (int *) w->d_data);
                break;
 
           default:
-               printf("Unknown action\n");
+               printf("Unknown action %d for %s\n",
+                      w->d_action, def_name(w));
                goto quit;
           }
      }
