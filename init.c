@@ -139,9 +139,6 @@ void init(void) {
      defvar("MEM", mem);
      defvar("args", args);
      defvar("phase", phase);
-     defvar("nlocals", nlocals);
-     defvar("locvar", locvar);
-     defvar("locbase", locbase);
 
      defconst("ENTER", A_ENTER);
      defconst("CONST", A_CONST);
@@ -180,43 +177,43 @@ void init(void) {
      //    quote lit gentok else quote lit2 dup gentok 16 lsr gentok fi ;
      assemble("litnum", 
               W("dup"), W("dup"), L(16), W("lsl"), L(16), W("asr"),
-              W("="), W("branch0"), 6,
-              W("lit"), W("lit"), W("gentok"), W("gentok"), W("branch"), 9,
+              W("="), W("(branch0)"), 6,
+              W("lit"), W("lit"), W("gentok"), W("gentok"), W("(branch)"), 9,
               W("lit"), W("lit2"), W("gentok"), W("dup"), W("gentok"),
               L(16), W("lsr"), W("gentok"), END);
 
      // : immword dup immed? if execute else genword fi ;
      assemble("immword",
-              W("dup"), W("immed?"), W("branch0"), 3,
-              W("execute"), W("branch"), 1, W("genword"), END);
+              W("dup"), W("immed?"), W("(branch0)"), 3,
+              W("execute"), W("(branch)"), 1, W("genword"), END);
 
      // : compile find if immword else number if litnum
      //    else create gentok fi fi ;
      assemble("compile",
-              W("find"), W("branch0"), 3, W("immword"), W("branch"), 8,
-              W("number"), W("branch0"), 3, W("litnum"), W("branch"), 2,
+              W("find"), W("(branch0)"), 3, W("immword"), W("(branch)"), 8,
+              W("number"), W("(branch0)"), 3, W("litnum"), W("(branch)"), 2,
               W("create"), W("gentok"), END);
 
      // : interp find if execute else number if else unknown fi fi ;
      assemble("interp",
-              W("find"), W("branch0"), 3, W("execute"), W("branch"), 6,
-              W("number"), W("branch0"), 2, W("branch"), 1,
+              W("find"), W("(branch0)"), 3, W("execute"), W("(branch)"), 6,
+              W("number"), W("(branch0)"), 2, W("(branch)"), 1,
               W("unknown"), END);
 
      // : repl do word dup ch@ while 
      //    state @ if compile else interp fi fi od pop
      assemble("repl", 
-              W("word"), W("dup"), W("ch@"), W("branch0"), 10,
-              W("state"), W("@"), W("branch0"), 3,
-              W("compile"), W("branch"), -12, 
-              W("interp"), W("branch"), -15,
+              W("word"), W("dup"), W("ch@"), W("(branch0)"), 10,
+              W("state"), W("@"), W("(branch0)"), 3,
+              W("compile"), W("(branch)"), -12, 
+              W("interp"), W("(branch)"), -15,
               W("pop"), END);
 
      // : main 0 state ! do accept inp @ while repl od
      assemble("main",
               W("0"), W("state"), W("!"),
               W("accept"), W("inp"), W("@"),
-              W("branch0"), 3, W("repl"), W("branch"), -8, END);
+              W("(branch0)"), 3, W("repl"), W("(branch)"), -8, END);
 }
 
 int main(void) {

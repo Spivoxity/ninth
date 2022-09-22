@@ -12,7 +12,7 @@ ninth2: $(NINTH2)
 
 boot.c: ninthboot system.nth script
 	./ninthboot <system.nth >tmpa
-	sed -f script tmpa
+	sed -n -f script tmpa
 	test -s $@
 
 %.s: %.c
@@ -40,8 +40,8 @@ boot%.o: %.c
 	$(CC) $(CFLAGS) -DINIT -c $< -o $@
 
 clean: force
-	rm -f boot.c ninth ninthboot $(NINTH) $(NINTHBOOT)
-	rm -f boot2.c ninth2 ninthboot2 $(NINTH2) $(NINTHBOOT2)
+	rm -f boot.c ninth ninthboot $(NINTH) $(NINTHBOOT) tmpa
+	rm -f boot2.s ninth2 ninthboot2 $(NINTH2) $(NINTHBOOT2)
 
 force:
 

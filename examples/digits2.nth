@@ -17,7 +17,7 @@
     n . nl
   else
     k 1+ -> k
-    10 1 for
+    10 1 for i
       s i member if
         n 10 * i +  
         dup k mod 0 = if

@@ -117,7 +117,7 @@ void dump(void) {
           if (n < ndefs && v == (unsigned) defs[n])
                printf("\t.long rom+%d\n", (byte *) v - dmem), n++;
           else
-               printf("\t.long %u\n", v);
+               printf("\t.long %#x\n", v);
      }
      printf("\n");
 

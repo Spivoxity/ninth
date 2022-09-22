@@ -89,7 +89,7 @@ void dump(void) {
                printf("     sym(&rom[%d]), // %s\n",
                       (v - (unsigned) dmem)/4, def_name(defs[n++]));
           else
-               printf("     %u,\n", v);
+               printf("     %#x,\n", v);
      }
      printf("};\n\n");
 

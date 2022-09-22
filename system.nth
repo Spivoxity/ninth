@@ -1,4 +1,4 @@
-: # 10 bp @ scan pop ;
+: # 10 dp @ scan pop ;
 # Now we can write comments like this
 
 : ' word create ;
@@ -15,6 +15,7 @@
 : -rot rot rot ;
 : 2pop pop pop ;
 : 2dup over over ;
+: rpop r> r> pop >r ;
 
 # Abbreviations
 : invert -1 xor ;
@@ -35,11 +36,14 @@
 : <= swap < not ;
 : >= < not ;
 : != = not ;
+: u> swap u< ;
 : nl 10 putc ;
+: negate 0 swap - ;
 : inc dup @ 1+ swap ! ;
 : dec dup @ 1- swap ! ;
+: incr over @ + swap ! ;
+: decr negate incr ;
 : 0< 0 < ;
-: negate 0 swap - ;
 : fnegate 0.0 swap f- ;
 
 # : xchg # Exchange between stack and memory
@@ -52,13 +56,17 @@
 : [lit] quote lit gentok ;
 
 # Storage allocation
+# When bootstrapping, HERE is the location of DP in the ROM, and THERE
+# refers to BP in the RAM.  After booting, they are the same, and BP
+# is an alias for DP.
 : here dp @ ;
-: align dp @ cell aligned dp ! ;
+: there bp @ ;
 : gentok here dup tok+ dp ! tok! ;
 : , here dup cell+ dp ! ! ;
-: constant ' align CONST rot defword ;
-: variable ' align CONST here defword ;
-: allot here + dp ! ;
+: constant ' CONST rot defword ;
+: variable ' bp @ cell aligned bp ! CONST there defword ;
+# : allot dup there swap memzero there + bp ! ;
+: allot there + bp ! ;
 
 # Dictionary layout
 : getdef cells MEM+ @ ;
@@ -77,11 +85,11 @@
 : origin defbase @ ;
 : offset here origin - ;
 
-: branch0> quote branch0 offset 0 gentok ;
-: branch> quote branch offset 0 gentok ;
+: branch0> quote (branch0) offset 0 gentok ;
+: branch> quote (branch) offset 0 gentok ;
 : >label offset over - 2/ 1- swap origin + tok! ;
 
-: <branch quote branch offset - 2/ 1- gentok ;
+: <branch quote (branch) offset - 2/ 1- gentok ;
 : label< offset ;
 
 : [?comp] immediate over [lit] quote ?comp ;
@@ -121,37 +129,18 @@
   dup 0 >= if			# Place ending label if needed
     >label else pop fi ;	
 
-: for immediate [?comp]
-  quote swap quote >r		# Push ending value on r-stack
-  label<     	   		# Label at top
-  quote dup quote r@ quote < branch0> # Go to end if finished
-  quote >r     	       		# Push current value on r-stack
-  locbase dup inc inc		# Adjust base for locals
-  ['] for ;   	  		# Push syntax tag
-
-: +repeat immediate
-  [?tag] for			# Check syntax
-  quote r> quote +		# Increment current value
-  swap <branch	 		# Go back to top
-  >label			# Label at bottom
-  quote r> quote 2pop		# Pop stuff from stacks
-  locbase dup dec dec ;		# Restore local base
-
-: repeat immediate 1 [lit] [compile] +repeat ;
-: i rp @ cell+ @ ;
-: j rp @ 3 cells + @ ;
-
-: (exit) r> pop ;
+: (exit) rpop ;
 : exit immediate pop-locals quote (exit) ;
 
 : dump depth do ?dup while dup pick . 1- od nl ;
 : clear do depth while pop od ;
-: spaces 0 for space repeat ;
 : min 2dup < if pop else nip fi ;
 : max 2dup < if nip else pop fi ;
 : abs dup 0< if negate fi ;
 
+
 # Strings
+
 : char word ch@ ;
 : [char] immediate [?comp] char [lit] ;
 : strlen dup do dup ch@ while 1+ od swap - ;
@@ -160,8 +149,8 @@
 : puttok tok>name putstr ;
 
 : " immediate
-[?comp] quote litstr 0 gentok [char] " here scan 
-strlen 1+ 2 aligned dup here 2 - tok! here + dp ! ;
+  [?comp] quote litstr 0 gentok [char] " here scan 
+  strlen 1+ 2 aligned dup here 2 - tok! here + dp ! ;
 
 : ." immediate [?comp] [compile] " quote putstr ;
 
@@ -174,33 +163,13 @@ while
 od
 pop 0 swap ch! pop inp @ dup ch@ if 1+ inp ! fi ;
 
-# Reimplementation of immed?
-: immed? tok>flags 1 and 0 != ;
-
-: (hide) dup tok>flags 2 or swap getdef 2 + tok! ;
-: hide ' (hide) ;
-
-: hidden tok>flags 2 and 0 != ;
-
-# Reimplementation of find to respect hidden flag
-: find
-  dict @
-  do dup 0 >= while
-    tuck dup
-    hidden not if
-      tok>name over strcmp not if
-        pop 1 exit
-      fi
-    else pop fi 
-    swap tok>next
-  od
-  pop 0 ;
-
 : savestr # string -- : save string at HERE
   do dup ch@ dup here ch! dp inc while 1+ od pop ;
 
 : isram # Test if address resides in RAM
   bp dp != if pop 1 else MEM - MEMSIZE u< fi ;
+
+: align do dp @ 3 and while 0 dp @ ch! dp inc od ;
 
 : clonedef
   align here swap
@@ -221,7 +190,7 @@ pop 0 swap ch! pop inp @ dup ch@ if 1+ inp ! fi ;
 
 : header # name -- token
   # Allocate indirect pointer
-  align bp @ dup cell + bp !
+  align there dup cell + bp !
   dup here swap !
   MEM - 4/ swap
 
@@ -284,20 +253,26 @@ fi ;
 
 # Local variables
 
+variable locbase cell allot
+variable locvar 32 toks allot
+variable nlocals cell allot
+
+locvar @ . nl
+
 : init-locals
   0 nlocals ! 0 locbase ! ;
 
 : pop-locals
   nlocals @ ?dup if quote (pop-locals) gentok fi ;
 
-: local? # tok --> index 1 if tok is a local variable, tok 0 if not
-  >r nlocals @
-  do ?dup while
-    1- dup toks locvar + tok@ r@ = if
-      r> pop locbase @ + 1 exit
+: local? # tok --> offset 1 if tok is a local variable, tok 0 if not
+  >r locvar nlocals @ 2 * toks +
+  do dup locvar u> while
+    2 toks - dup tok@ r@ = if
+      rpop tok+ tok@ locbase @ + 1 exit
     fi
   od
-  r> 0 ;
+  pop r> 0 ;
 
 : genword
   local? if quote (get-local) gentok else gentok fi ;
@@ -311,12 +286,86 @@ fi ;
     error puttok ." is not a local variable" nl quit
   fi ;
 
+: def-local # x n
+  swap locvar nlocals @ 2 * toks + tuck tok! tok+ tok!
+  nlocals inc ;
+
 : { immediate [?comp]
-  do ' dup ['] } != while locvar nlocals @ toks + ! nlocals inc od pop
+  do ' dup ['] } != while
+    nlocals @ def-local
+  od pop
   quote (locals) nlocals @ gentok ;
+
+# n TIMES ... REPEAT
+: times immediate [?comp]
+  label<
+  quote dup quote 0 quote > branch0>
+  quote >r
+  locbase inc
+  ['] times ;
+
+: end-times
+  quote r> quote 1-
+  swap <branch
+  >label quote pop
+  locbase dec ;
+
+# hi lo FOR i ... REPEAT
+: for immediate [?comp]
+  quote swap quote >r		# Push ending value on r-stack
+  label<     	   		# Label at top
+  quote dup quote r@ quote < branch0> # Go to end if finished
+  quote >r     	       		# Push current value on r-stack
+  locbase 2 incr		# Adjust base for locals
+  ' locbase @ negate def-local  # Create controlled variable
+  ['] for ;   	  		# Push syntax tag
+
+: +repeat immediate
+  [?tag] for			# Check syntax
+  quote r> quote +		# Increment current value
+  swap <branch	 		# Go back to top
+  >label			# Label at bottom
+  quote rpop quote pop		# Pop stuff from stacks
+  nlocals dec locbase 2 decr ;	# Restore locals
+
+: repeat immediate
+  dup ['] times = if pop end-times else quote 1 [compile] +repeat fi ;
+
+: spaces times space repeat ;
+
+
+# Token attributes
+
+1 constant IMMED
+2 constant HIDDEN
+4 constant HASARG
+
+: attr? swap tok>flags and 0 != ;
+
+: set-attr over tok>flags or swap getdef 2 + tok! ;
+
+: hide ' HIDDEN set-attr ;
+
+# Reimplementation of immed?
+: immed? IMMED attr? ;
+
+# Reimplementation of find to respect hidden flag
+: find
+  dict @
+  do dup 0 >= while
+    tuck dup
+    HIDDEN attr? not if
+      tok>name over strcmp not if
+        pop 1 exit
+      fi
+    else pop fi 
+    swap tok>next
+  od
+  pop 0 ;
 
 
 # Disassembler
+
 : names 
 dict @ do dup 0 >= while dup space puttok tok>next od pop nl ;
 
@@ -324,6 +373,13 @@ dict @ do dup 0 >= while dup space puttok tok>next od pop nl ;
 dict @ do dup 0 >= while 2dup = if 2pop 1 exit fi tok>next od 2pop 0 ;
 
 : seestr dup tok@ swap tok+ tuck + swap putstr ;
+
+' branch HASARG set-attr
+' branch0 HASARG set-attr
+' (locals) HASARG set-attr
+' (get-local) HASARG set-attr
+' (set-local) HASARG set-attr
+' (pop-locals) HASARG set-attr
 
 : seeword # Disassemble word and advance pointer
   dup tok@
@@ -334,9 +390,7 @@ dict @ do dup 0 >= while 2dup = if 2pop 1 exit fi tok>next od 2pop 0 ;
       pop ." #" tok+ dup tok@ .
     else dup ['] lit2 = if
       pop ." ##" tok+ dup tok@ uxth swap tok+ tuck tok@ 16 lsl + .
-    else dup ['] branch = over ['] branch0 = or
-        over ['] (locals) = or over ['] (get-local) = or
-        over ['] (set-local) = or over ['] (pop-locals) = or if
+    else dup HASARG attr? if
       puttok [char] : putc tok+ dup tok@ .
     else dup isword if 
       puttok space
