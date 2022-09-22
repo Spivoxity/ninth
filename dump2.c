@@ -107,16 +107,17 @@ void dump(void) {
      }
      printf("\n");
 
+     n = 0;
      printf("\t.globl boot\n");
      printf("\t.p2align 2\n");
      printf("boot:\n");
      for (unsigned *p = (unsigned *) mem; p < (unsigned *) bp; p++) {
           unsigned v = *p;
 
-          if (v >= (unsigned) dmem && v < (unsigned) dp)
-               printf("\t.long rom+%d\n", (byte *) v - dmem);
+          if (n < ndefs && v == (unsigned) defs[n])
+               printf("\t.long rom+%d\n", (byte *) v - dmem), n++;
           else
-               printf("\t.long ?%u?\n", v);
+               printf("\t.long %u\n", v);
      }
      printf("\n");
 

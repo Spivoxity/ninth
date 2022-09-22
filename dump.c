@@ -86,10 +86,10 @@ void dump(void) {
           unsigned v = *p;
 
           if (n < ndefs && v == (unsigned) defs[n])
-               printf("     sym(&rom[%d]), /* %s */\n",
+               printf("     sym(&rom[%d]), // %s\n",
                       (v - (unsigned) dmem)/4, def_name(defs[n++]));
           else
-               printf("     ?%u?\n", v);
+               printf("     %u,\n", v);
      }
      printf("};\n\n");
 

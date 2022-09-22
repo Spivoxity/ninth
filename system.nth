@@ -3,32 +3,31 @@
 
 : ' word create ;
 
-: immediate over 4 * MEM + @ 2 + dup tok@ 1 or swap tok! ;
+: tok+ 2 + ;
+: cells 4 * ;
+: MEM+ MEM + ;
+
+: immediate over cells MEM+ @ tok+ dup tok@ 1 or swap tok! ;
 ' immediate 0 immediate pop pop
 ' # 0 immediate pop pop
 
 # Stack manipulations
-# : rot 2 roll ;
-# : over 1 pick ;
-# : nip swap pop ;
-# : tuck dup rot rot ;
 : -rot rot rot ;
 : 2pop pop pop ;
 : 2dup over over ;
 
 # Abbreviations
 : invert -1 xor ;
-: 1+ 1 + ;
 : 1- 1 - ;
 : 2/ 1 asr ;
 : 4/ 2 asr ;
 : cell 4 ;
 : cell+ 4 + ;
 : cell- 4 - ;
-: cells 4 * ;
+: toks 2 * ;
+: uxth 16 lsl 16 lsr ;
 : space 32 putc ;
 : aligned 1- tuck + swap invert and ;
-: MEM+ MEM + ;
 : on 1 swap ! ;
 : off 0 swap ! ;
 : not 0 = ;
@@ -55,7 +54,7 @@
 # Storage allocation
 : here dp @ ;
 : align dp @ cell aligned dp ! ;
-: gentok here dup 2 + dp ! tok! ;
+: gentok here dup tok+ dp ! tok! ;
 : , here dup cell+ dp ! ! ;
 : constant ' align CONST rot defword ;
 : variable ' align CONST here defword ;
@@ -86,6 +85,7 @@
 : label< offset ;
 
 : [?comp] immediate over [lit] quote ?comp ;
+: [?tag] immediate ' [lit] quote ?tag ;
 
 : if immediate
   [?comp]			# Use only in compile state
@@ -93,13 +93,13 @@
   ['] if ;			# Push IF as tag for nesting checks
 
 : else immediate
-  ['] if ?tag 			# Check nesting
+  [?tag] if 			# Check nesting
   branch> 			# Finish THEN part with branch to end
   swap >label			# Place label for ELSE part
   ['] if ;			# Push IF tag again
 
 : fi immediate
-  ['] if ?tag			# Check nesting
+  [?tag] if			# Check nesting
   >label ;			# Place exit label
 
 # : ?dup dup if dup fi ;
@@ -111,12 +111,12 @@
   ['] do ;			# Push DO as tag for nesting check
 
 : while immediate
-  ['] do ?tag 			# Check nesting
+  [?tag] do 			# Check nesting
   pop branch0> 			# Pop dummy and replace with jump
   ['] do ;			# Push tag again
 
 : od immediate
-  ['] do ?tag			# Check nesting
+  [?tag] do			# Check nesting
   swap <branch			# Branch back to start
   dup 0 >= if			# Place ending label if needed
     >label else pop fi ;	
@@ -130,7 +130,7 @@
   ['] for ;   	  		# Push syntax tag
 
 : +repeat immediate
-  ['] for ?tag			# Check syntax
+  [?tag] for			# Check syntax
   quote r> quote +		# Increment current value
   swap <branch	 		# Go back to top
   >label			# Label at bottom
@@ -156,7 +156,7 @@
 : [char] immediate [?comp] char [lit] ;
 : strlen dup do dup ch@ while 1+ od swap - ;
 : putstr do dup ch@ ?dup while putc 1+ od pop ;
-: litstr r> dup 2 + swap tok@ over + >r ;
+: litstr r> dup tok+ swap tok@ over + >r ;
 : puttok tok>name putstr ;
 
 : " immediate
@@ -284,13 +284,16 @@ fi ;
 
 # Local variables
 
+: init-locals
+  0 nlocals ! 0 locbase ! ;
+
 : pop-locals
   nlocals @ ?dup if quote (pop-locals) gentok fi ;
 
 : local? # tok --> index 1 if tok is a local variable, tok 0 if not
   >r nlocals @
   do ?dup while
-    1- dup 2 * locvar + tok@ r@ = if
+    1- dup toks locvar + tok@ r@ = if
       r> pop locbase @ + 1 exit
     fi
   od
@@ -309,7 +312,7 @@ fi ;
   fi ;
 
 : { immediate [?comp]
-  do ' dup ['] } != while locvar nlocals @ 2 * + ! nlocals inc od pop
+  do ' dup ['] } != while locvar nlocals @ toks + ! nlocals inc od pop
   quote (locals) nlocals @ gentok ;
 
 
@@ -320,23 +323,25 @@ dict @ do dup 0 >= while dup space puttok tok>next od pop nl ;
 : isword # Test if token is in the dictionary
 dict @ do dup 0 >= while 2dup = if 2pop 1 exit fi tok>next od 2pop 0 ;
 
-: seestr dup tok@ swap 2 + tuck + swap putstr ;
+: seestr dup tok@ swap tok+ tuck + swap putstr ;
 
 : seeword # Disassemble word and advance pointer
   dup tok@
   dup ['] litstr = if 
-    pop [char] " putc space 2 + seestr [char] " putc space
+    pop [char] " putc space tok+ seestr [char] " putc space
   else
     dup ['] lit = if 
-      pop [char] # putc 2 + dup tok@ .
+      pop ." #" tok+ dup tok@ .
     else dup ['] lit2 = if
-      pop [char] # putc 2 + dup tok@ swap 2 + tuck tok@ 16 lsl + .
-    else dup ['] branch = over ['] branch0 = or if
-      puttok space 2 + dup tok@ .
+      pop ." ##" tok+ dup tok@ uxth swap tok+ tuck tok@ 16 lsl + .
+    else dup ['] branch = over ['] branch0 = or
+        over ['] (locals) = or over ['] (get-local) = or
+        over ['] (set-local) = or over ['] (pop-locals) = or if
+      puttok [char] : putc tok+ dup tok@ .
     else dup isword if 
       puttok space
     else . fi fi fi fi
-    2 + 
+    tok+ 
   fi ;
 
 : seebody 

@@ -153,17 +153,17 @@ void init(void) {
      // These are defined as NOPs so they can be redefined in system.nth
      prim_action("?colon", A_NOP);
      prim_action("?comp", A_POP);
+     prim_action("init-locals", A_NOP);
      prim_action("pop-locals", A_NOP);
      prim_subr("genword", p_gentok);
      assemble("?tag", W("pop"), W("pop"), END);
 
      // : : immediate ?colon 1 state ! word create align dp @ defbase !
-     //   0 nlocals ! 0 locbase ! ['] : ;
+     //   init-locals ['] : ;
      assemble(":",
               W("?colon"), W("1"), W("state"), W("!"), 
               W("word"), W("create"), W("align"),
-              W("dp"), W("@"), W("defbase"), W("!"),
-              W("0"), W("nlocals"), W("!"), W("0"), W("locbase"), W("!"),
+              W("dp"), W("@"), W("defbase"), W("!"), W("init-locals"),
               W("lit"), W(":"), END);
      immediate(":");
 

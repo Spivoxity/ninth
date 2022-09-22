@@ -81,6 +81,7 @@ quit:
           case A_MUL: binary(*); break;
           case A_DIV: binary(/); break;
           case A_MOD: binary(%); break;
+          case A_INC: acc++; break;
           case A_EQ: binary(==); break;
           case A_LESS: binary(<); break;
           case A_AND: binary(&); break;

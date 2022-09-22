@@ -5,7 +5,7 @@ byte mem[MEMSIZE];
 byte *rstack[RSTACK];
 char inbuf[INBUF];
 char pad[PAD];
-short locvar[16];
+short locvar[32];
 
 #define FLO(a) (* (float *) (a))
 

@@ -55,7 +55,7 @@ typedef struct {
      action("0", A_ZERO) action("1", A_ONE) action("2", A_TWO) \
      action("3", A_THREE) action("4", A_FOUR) \
      action("+", A_ADD) action("-", A_SUB) \
-     action("*", A_MUL) action("/", A_DIV)                 \
+     action("*", A_MUL) action("/", A_DIV) action("1+", A_INC)     \
      action("mod", A_MOD) action("=", A_EQ) action("<", A_LESS) \
      action("u<", A_ULESS) action("and", A_AND) action("lsl", A_LSL) \
      action("lsr", A_LSR) action("asr", A_ASR) action("or", A_OR) \
