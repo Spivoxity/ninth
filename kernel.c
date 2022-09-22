@@ -188,6 +188,30 @@ quit:
                push(w->d_data);
                break;
 
+          case A_LOCALS:
+               /* The stack contains (x1 x2 ... xn) with n at ip:
+                  transfer (x1 x2 ... xn) to Rstack in reverse order. */
+               tmp = *ip++;
+               while (tmp > 0) {
+                    *--rp = acc;
+                    acc = *++sp;
+                    tmp--;
+               }
+               break;
+        
+          case A_GETLOC:
+               push(rp[*ip++]);
+               break;
+
+          case A_SETLOC:
+               rp[*ip++] = acc;
+               acc = *++sp;
+               break;
+
+          case A_POPLOCS:
+               rp += *ip++;
+               break;
+
           default:
                printf("Unknown action %d for %s\n",
                       w->d_action, def_name(w));

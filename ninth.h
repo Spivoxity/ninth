@@ -69,7 +69,9 @@ typedef struct {
      action("branch", A_BRANCH) action("lit", A_LIT) action("lit2", A_LIT2) \
      action("execute", A_EXECUTE) action0(A_CALL) \
      action0(A_CONST) action("over", A_OVER) action("tuck", A_TUCK) \
-     action("nip", A_NIP)
+     action("nip", A_NIP) \
+     action("(locals)", A_LOCALS) action("(get-local)", A_GETLOC) \
+     action("(set-local)", A_SETLOC) action("(pop-locals)", A_POPLOCS)
 
 /* The ACTIONS macro is used several times, and here is the first: an
    enumerated type. */

@@ -46,11 +46,6 @@
 # : xchg # Exchange between stack and memory
 # dup @ -rot ! ;
 
-# Access to R-stack
-# I like these definitions, but they are probably too slow
-# : >r rp @ xchg rp @ cell- dup rp ! ! ;
-# : r> rp @ @ rp @ cell+ dup rp ! xchg ;
-
 # Quotations
 : ['] immediate lit lit gentok ' gentok ;
 : [compile] immediate ' gentok ;
@@ -289,16 +284,8 @@ fi ;
 
 # Local variables
 
-: (locals) 			# (x1 x2 ... xn n)
-  r> swap                       # (x1 x2 ... x[k] ra k : x[k+1] ... x[n])
-  do dup while rot >r 1- od pop
-  >r ;                          # (: ra x1 x2 ... xn)
-
-: (pop-locals)
-  r> swap cells rp @ + rp ! >r ;
-  
 : pop-locals
-  nlocals @ ?dup if [lit] quote (pop-locals) fi ;
+  nlocals @ ?dup if quote (pop-locals) gentok fi ;
 
 : local? # tok --> index 1 if tok is a local variable, tok 0 if not
   >r nlocals @
@@ -309,37 +296,21 @@ fi ;
   od
   r> 0 ;
 
-: (get-local) 1+ cells rp @ + @ ;
-: (local-0) rp @ cell + @ ;
-: (local-1) rp @ 2 cells + @ ;
-: (local-2) rp @ 3 cells + @ ;
-: (set-local) 1+ cells rp @ + ! ;
-
 : genword
-  local? if
-    dup 0 = if
-      pop quote (local-0)
-    else dup 1 = if
-      pop quote (local-1)
-    else dup 2 = if
-      pop quote (local-2)
-    else
-      [lit] quote (get-local)
-    fi fi fi
-  else gentok fi ;
+  local? if quote (get-local) gentok else gentok fi ;
 
 : error ." Error: " ;
 
 : -> immediate [?comp]
   ' local? if
-    [lit] quote (set-local)
+    quote (set-local) gentok
   else
     error puttok ." is not a local variable" nl quit
   fi ;
 
 : { immediate [?comp]
   do ' dup ['] } != while locvar nlocals @ 2 * + ! nlocals inc od pop
-  nlocals @ [lit] quote (locals) ;
+  quote (locals) nlocals @ gentok ;
 
 
 # Disassembler
