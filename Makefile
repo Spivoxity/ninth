@@ -1,4 +1,4 @@
-all: ninth
+all: ninth ninth2
 
 NINTH = kernel.o prims.o boot.o main.o
 ninth: $(NINTH)

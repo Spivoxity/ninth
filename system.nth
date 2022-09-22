@@ -62,8 +62,8 @@
 : align dp @ cell aligned dp ! ;
 : gentok here dup 2 + dp ! tok! ;
 : , here dup cell+ dp ! ! ;
-: constant ' align CONST here defword , ;
-: variable ' align VAR here defword ;
+: constant ' align CONST swap defword ;
+: variable ' align CONST here defword ;
 : allot here + dp ! ;
 
 # Dictionary layout
@@ -177,7 +177,7 @@ pop 0 swap ch! pop inp @ dup ch@ if 1+ inp ! fi ;
 
 : hidden tok>flags 2 and 0 != ;
 
-# Reimplementation of find
+# Reimplementation of find to respect hidden flag
 : find
   dict @
   do dup 0 >= while

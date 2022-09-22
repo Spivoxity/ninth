@@ -165,10 +165,8 @@ int *p_gentok(int *sp) {
 
 int *p_defword(int *sp) {
      def *d = defn(sp[2]);
-     int action = sp[1];
-     byte *data = (byte *) sp[0];
-     d->d_action = action;
-     d->d_data = data;
+     d->d_action = sp[1];
+     d->d_data = (unsigned) sp[0];
      sp += 3;
 
      printf("%s defined\n", def_name(d));

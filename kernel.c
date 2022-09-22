@@ -194,12 +194,8 @@ quit:
                push((ip[1] << 16) + ip[0]); ip += 2;
                break;
 
-          case A_VAR:
-               push((int) w->d_data);
-               break;
-
           case A_CONST:
-               push(* (int *) w->d_data);
+               push(w->d_data);
                break;
 
           default:

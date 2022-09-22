@@ -20,7 +20,7 @@ static int header(char *name) {
      p->d_next = dict;
      p->d_flags = 0;
      p->d_action = 0;
-     p->d_data = NULL;
+     p->d_data = 0;
      strcpy((char *) dp, name);
      dp += strlen(name) + 1;
 
@@ -56,7 +56,7 @@ void prim_action(char *name, int action) {
 void _prim_subr(char *name, int *(*subr)(int *), char *sym) {
      int d = create(name);
      defn(d)->d_action = A_CALL;
-     defn(d)->d_data = (byte *) subr;
+     defn(d)->d_data = (unsigned) subr;
      defsym(defn(d), (byte *) subr, sym);
 }
 
@@ -64,8 +64,8 @@ void _prim_subr(char *name, int *(*subr)(int *), char *sym) {
 
 void _defvar(char *name, byte *addr, char *sym) {
      int d = create(name);
-     defn(d)->d_action = A_VAR;
-     defn(d)->d_data = addr;
+     defn(d)->d_action = A_CONST;
+     defn(d)->d_data = (unsigned) addr;
      defsym(defn(d), addr, sym);
 }
 
@@ -73,11 +73,8 @@ void _defvar(char *name, byte *addr, char *sym) {
 
 void defconst(char *name, unsigned val) {
      int d = create(name);
-     dp = ALIGN(dp, 4);
      defn(d)->d_action = A_CONST;
-     defn(d)->d_data = dp;
-     * (unsigned *) dp = val;
-     dp += sizeof(unsigned);
+     defn(d)->d_data = val;
 }
 
 ushort W(char *name) {
@@ -112,7 +109,7 @@ void assemble(char *name, ...) {
      va_end(va);
 
      defn(d)->d_action = A_ENTER;
-     defn(d)->d_data = base;
+     defn(d)->d_data = (unsigned) base;
 }
 
 void immediate(char *name) {
@@ -142,7 +139,6 @@ void init(void) {
      defvar("locbase", locbase);
 
      defconst("ENTER", A_ENTER);
-     defconst("VAR", A_VAR);
      defconst("CONST", A_CONST);
 
 #define __SUBR(name, func)  prim_subr(name, func);

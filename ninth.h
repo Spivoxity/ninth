@@ -25,7 +25,7 @@ typedef struct {
      short d_next;              // Token for next definition, or -1
      ushort d_flags;            // Attributes of the word
      unsigned d_action;         // Action when executed
-     void *d_data;              // Pointer to the word's body or data
+     unsigned d_data;           // Data or pointer to the word's body
 } def;
 
 /* In the portable version of Ninth, the d_action field selects a case
@@ -67,7 +67,7 @@ typedef struct {
      action("swap", A_SWAP) action("r>", A_RPOP) action(">r", A_RPUSH) \
      action("r@", A_RAT) action("rot", A_ROT) action("branch0", A_BRANCH0) \
      action("branch", A_BRANCH) action("lit", A_LIT) action("lit2", A_LIT2) \
-     action("execute", A_EXECUTE) action0(A_CALL) action0(A_VAR) \
+     action("execute", A_EXECUTE) action0(A_CALL) \
      action0(A_CONST) action("over", A_OVER) action("tuck", A_TUCK) \
      action("nip", A_NIP)
 
