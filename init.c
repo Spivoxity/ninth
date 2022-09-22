@@ -1,8 +1,10 @@
 // init.c
 
+#define PORTABLE 1
 #include "ninth.h"
 
 int dict;
+byte dmem[MEMSIZE];
 
 // header -- append dictionary entry
 static int header(char *name) {
@@ -53,29 +55,32 @@ void prim_action(char *name, int action) {
      defn(d)->d_action = action;
 }
 
-void _prim_subr(char *name, int *(*subr)(int *), char *sym) {
+void _prim_subr(char *name, unsigned subr, char *sym) {
      int d = create(name);
      defn(d)->d_action = A_CALL;
-     defn(d)->d_data = (unsigned) subr;
-     defsym(defn(d), (byte *) subr, sym);
+     defn(d)->d_data = subr;
+     defsym(defn(d), subr, sym);
 }
 
-#define prim_subr(name, subr) _prim_subr(name, subr, #subr)
+#define prim_subr(name, subr) _prim_subr(name, (unsigned) subr, #subr)
 
-void _defvar(char *name, byte *addr, char *sym) {
+void _defvar(char *name, unsigned addr, char *sym) {
      int d = create(name);
      defn(d)->d_action = A_CONST;
-     defn(d)->d_data = (unsigned) addr;
+     defn(d)->d_data = addr;
      defsym(defn(d), addr, sym);
 }
 
-#define defvar(name, addr) _defvar(name, (byte *) &addr, #addr)
+#define defvar(name, addr) _defvar(name, (unsigned) &addr, "&" #addr)
 
-void defconst(char *name, unsigned val) {
+void _defconst(char *name, unsigned val, char *sym) {
      int d = create(name);
      defn(d)->d_action = A_CONST;
      defn(d)->d_data = val;
+     defsym(defn(d), val, sym);
 }
+
+#define defconst(name, val) _defconst(name, val, #val)
 
 ushort W(char *name) {
      // Timing matters here: we will evaluate calls to W() before
@@ -140,6 +145,7 @@ void init(void) {
 
      defconst("ENTER", A_ENTER);
      defconst("CONST", A_CONST);
+     defconst("MEMSIZE", MEMSIZE);
 
 #define __SUBR(name, func)  prim_subr(name, func);
      PRIMS(__SUBR)

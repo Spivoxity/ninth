@@ -1,5 +1,6 @@
-// dump.c
+// dump2.c
 
+#define PORTABLE 1
 #include "ninth.h"
 
 #define MAXDEFS 500
@@ -7,11 +8,11 @@
 
 def *defs[MAXDEFS];
 def *sdefs[MAXSYM];
-void *addrs[MAXSYM];
+unsigned addrs[MAXSYM];
 char *syms[MAXSYM];
 int nsyms = 0, ndefs;
 
-void defsym(def *d, byte *addr, char *sym) {
+void defsym(def *d, unsigned addr, char *sym) {
      sdefs[nsyms] = d;
      addrs[nsyms] = addr;
      syms[nsyms] = sym;
@@ -49,6 +50,8 @@ void dump(void) {
           printf("\t.equ %s, %d\n", act_name[i], i);
      printf("\t.endif\n\n");
 
+     printf("\t.equ MEMSIZE, %d\n\n", MEMSIZE);
+
      printf("\t.equ bp, dp\n\n");
 
      printf("\t.section .rodata\n\n");
@@ -68,13 +71,17 @@ void dump(void) {
                printf("\t.short %d\n", d->d_flags);
                printf("\t.long %s\n", act_name[d->d_action]);
 
-               if (k < nsyms && d->d_data == addrs[k])
-                    printf("\t.long %s\n", syms[k]);
-               else if ((byte *) d->d_data >= dmem && (byte *) d->d_data < dp)
-                    assert((unsigned) d->d_data % 4 == 0),
+               if (k < nsyms && d->d_data == addrs[k]) {
+		    char *sym = syms[k];
+		    if (*sym == '&') sym++;
+                    printf("\t.long %s\n", sym);
+	       } else if (d->d_action == A_ENTER && (byte *) d->d_data >= dmem
+			  && (byte *) d->d_data < dp) {
+                    assert((unsigned) d->d_data % 4 == 0);
                     printf("\t.long rom+%d\n", (byte *) d->d_data - dmem);
-               else
+	       } else {
                     printf("\t.long %#x\n", (int) d->d_data);
+	       }
 
                p += sizeof(def);
 

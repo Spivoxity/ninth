@@ -1,17 +1,7 @@
 // kernel.c: primitive actions
 
-#define EXTERN
+#define PORTABLE 1
 #include "ninth.h"
-
-byte mem[MEMSIZE];
-byte *rstack[RSTACK];
-char inbuf[INBUF];
-char pad[PAD];
-short locvar[16];
-
-#ifdef INIT
-byte dmem[MEMSIZE];
-#endif
 
 void show_stack(int *sp) {
      for (int *p = sp; p < (int *) &mem[SBASE]; p++)
@@ -43,7 +33,7 @@ quit:
           w = defn(*ip++);
 
      reswitch:
-          if (trace) {
+          if (trace && w->d_action != A_EXIT) {
                *sp = acc;
                printf("--");
                show_stack(sp);

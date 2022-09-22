@@ -62,7 +62,7 @@
 : align dp @ cell aligned dp ! ;
 : gentok here dup 2 + dp ! tok! ;
 : , here dup cell+ dp ! ! ;
-: constant ' align CONST swap defword ;
+: constant ' align CONST rot defword ;
 : variable ' align CONST here defword ;
 : allot here + dp ! ;
 
@@ -127,11 +127,21 @@
     >label else pop fi ;	
 
 : for immediate [?comp]
-  quote swap quote >r label< quote dup quote r@ quote < 
-  branch0> quote >r locbase dup inc inc ['] for ;
-: +repeat immediate ['] for ?tag 
-  swap quote r> quote + <branch >label quote r> quote 2pop
-  locbase dup dec dec ;
+  quote swap quote >r		# Push ending value on r-stack
+  label<     	   		# Label at top
+  quote dup quote r@ quote < branch0> # Go to end if finished
+  quote >r     	       		# Push current value on r-stack
+  locbase dup inc inc		# Adjust base for locals
+  ['] for ;   	  		# Push syntax tag
+
+: +repeat immediate
+  ['] for ?tag			# Check syntax
+  quote r> quote +		# Increment current value
+  swap <branch	 		# Go back to top
+  >label			# Label at bottom
+  quote r> quote 2pop		# Pop stuff from stacks
+  locbase dup dec dec ;		# Restore local base
+
 : repeat immediate 1 [lit] [compile] +repeat ;
 : i rp @ cell+ @ ;
 : j rp @ 3 cells + @ ;
@@ -377,13 +387,13 @@ fi ;
 
 : banner ." NINTH (" MEMSIZE MEM+ here - . ." bytes free)" nl ;
 
-: ear-loop
+: toplevel
   0 state !
   do accept inp @ while repl od ;
 
 : readfile
   dup ." [Reading " putstr ." ]" nl
-  redirect ear-loop ;
+  redirect toplevel ;
 
 : reset # Delete any half-complete definition
   origin if origin dp ! 0 defbase ! fi ;
@@ -396,7 +406,7 @@ fi ;
       args @ cell+ do dup @ ?dup while readfile cell+ od pop
       1 phase !
     else phase @ 1 = if
-      banner ear-loop nl ." Bye" nl exit
+      banner toplevel nl ." Bye" nl exit
     else
       ." [Aborted]" nl exit
     fi fi

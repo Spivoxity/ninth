@@ -1,3 +1,5 @@
+include config.make
+
 all: ninth ninth2
 
 NINTH = kernel.o prims.o boot.o main.o
@@ -9,7 +11,7 @@ ninth2: $(NINTH2)
 	$(CC) $(CFLAGS) $^ -lm -o $@
 
 boot.c: ninthboot system.nth script
-	ninthboot <system.nth >tmpa
+	./ninthboot <system.nth >tmpa
 	sed -f script tmpa
 	test -s $@
 
@@ -17,12 +19,12 @@ boot.c: ninthboot system.nth script
 	$(CC) $(CFLAGS) -S $<
 
 boot2.s: ninthboot2 system.nth script2
-	ninthboot2 <system.nth >tmpa
+	./ninthboot2 <system.nth >tmpa
 	sed -f script2 tmpa
 	test -s $@
 
 boot2.o: boot2.s
-	as --32 -defsym PORTABLE=1 $< -o $@
+	as $(HOSTASFLAGS) -defsym PORTABLE=1 $< -o $@
 
 NINTHBOOT = bootkernel.o bootprims.o init.o dump.o
 ninthboot: $(NINTHBOOT)
@@ -43,9 +45,8 @@ clean: force
 
 force:
 
-CC = gcc -m32
-AS = gcc -m32 -c
-CFLAGS = -O2 -Wall -fno-strict-aliasing -no-pie
+CC = gcc
+CFLAGS = -O2 -Wall -fno-strict-aliasing $(HOSTCFLAGS)
 
 ###
 

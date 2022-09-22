@@ -1,5 +1,11 @@
+#define EXTERN
 #include "ninth.h"
-#include "math.h"
+
+byte mem[MEMSIZE];
+byte *rstack[RSTACK];
+char inbuf[INBUF];
+char pad[PAD];
+short locvar[16];
 
 #define FLO(a) (* (float *) (a))
 
@@ -19,7 +25,9 @@ int *p_fless(int *sp) {
      sp++; return sp;
 }
 
-#define float_fun(name, fun) \
+#include "math.h"
+
+#define float_fun(name, fun)					\
      int *name(int *sp) { FLO(sp) = fun(FLO(sp)); return sp; }
 
 float_fun(p_sqrt, sqrtf)
@@ -120,11 +128,6 @@ int *p_number(int *sp) {
 int *p_strcmp(int *sp) {
      sp[1] = strcmp((char *) sp[1], (char *) sp[0]);
      sp++;
-     return sp;
-}
-
-int *p_memsize(int *sp) {
-     *--sp = MEMSIZE;
      return sp;
 }
 

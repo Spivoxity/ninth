@@ -73,12 +73,14 @@ typedef struct {
 
 /* The ACTIONS macro is used several times, and here is the first: an
    enumerated type. */
+#ifdef PORTABLE
 enum {
 #define __ENUM(s, p) p,
 #define __ENUM0(p) p,
      ACTIONS(__ENUM, __ENUM0)
      N_ACTIONS
 };
+#endif
 
 /* Primitives implemented as subroutines */
 #define PRIMS(prim) \
@@ -97,7 +99,6 @@ enum {
      prim("align", p_align) \
      prim("strcmp", p_strcmp) \
      prim("depth", p_depth) \
-     prim("MEMSIZE", p_memsize) \
      prim("f+", p_fadd) \
      prim("f-", p_fsub) \
      prim("f*", p_fmul) \
@@ -127,10 +128,11 @@ PRIMS(__DECL)
 extern byte mem[];
 extern char inbuf[];
 extern char pad[];
+extern byte *rstack[];
+extern int dict;
 
 EXTERN byte *defbase;
 EXTERN byte *dp;
-extern int dict;
 EXTERN int trace;
 EXTERN char *inp;
 EXTERN int state;
@@ -160,7 +162,7 @@ int find(char *name);
 void init(void);
 
 /* dump.c */
-void defsym(def *d, byte *addr, char *sym);
+void defsym(def *d, unsigned addr, char *sym);
 void dump(void);
 
 /* boot.c */

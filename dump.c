@@ -1,5 +1,6 @@
 // dump.c
 
+#define PORTABLE 1
 #include "ninth.h"
 
 #define MAXDEFS 500
@@ -7,11 +8,11 @@
 
 def *defs[MAXDEFS];
 def *sdefs[MAXSYM];
-void *addrs[MAXSYM];
+unsigned addrs[MAXSYM];
 char *syms[MAXSYM];
 int nsyms = 0, ndefs;
 
-void defsym(def *d, byte *addr, char *sym) {
+void defsym(def *d, unsigned addr, char *sym) {
      sdefs[nsyms] = d;
      addrs[nsyms] = addr;
      syms[nsyms] = sym;
@@ -43,6 +44,7 @@ void dump(void) {
      byte *p;
 
      printf("// boot.c\n");
+     printf("#define PORTABLE 1\n");
      printf("#include \"ninth.h\"\n\n");
 
      bp = ALIGN(bp, 4);
@@ -59,14 +61,16 @@ void dump(void) {
                       d->d_next, d->d_flags, act_name[d->d_action]);
 
                if (k < nsyms && d->d_data == addrs[k])
-                    printf("sym(&%s), /* %d */", syms[k], k);
-               else if ((byte *) d->d_data >= dmem && (byte *) d->d_data < dp)
-                    assert((unsigned) d->d_data % 4 == 0),
+                    printf("sym(%s),", syms[k]);
+               else if (d->d_action == A_ENTER && (byte *) d->d_data >= dmem
+			&& (byte *) d->d_data < dp) {
+		    assert((unsigned) d->d_data % 4 == 0);
                     printf("sym(&rom[%d]),", ((byte *) d->d_data - dmem)/4);
-               else
+	       } else {
                     printf("%#x,", (int) d->d_data);
+	       }
 
-               printf(" /* %s */\n", def_name(d));
+               printf(" // %s\n", def_name(d));
                if (d == sdefs[k]) k++;
                p += sizeof(def); n++;
           } else {
