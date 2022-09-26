@@ -1,4 +1,5 @@
-// kernel.c: primitive actions
+// ninth/kernel.c
+// Copyright (C) 2022 J. M. Spivey
 
 #define PORTABLE 1
 #include "ninth.h"

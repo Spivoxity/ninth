@@ -1,4 +1,5 @@
-// main.c
+// ninth/main.c
+// Copyright (C) 2022 J. M. Spivey
 
 #define EXTERN
 #include "ninth.h"

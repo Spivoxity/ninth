@@ -1,3 +1,6 @@
+# ninth/Makefile
+# Copyright (C) 2022 J. M. Spivey
+
 include config.make
 
 all: ninth-arm.elf

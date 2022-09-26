@@ -1,4 +1,5 @@
-// ninth.h
+// ninth/ninth.h
+// Copyright (C) 2022 J. M. Spivey
 
 /* Parameters */
 

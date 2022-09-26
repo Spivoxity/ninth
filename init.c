@@ -1,4 +1,5 @@
-// init.c
+// ninth/init.c
+// Copyright (C) 2022 J. M. Spivey
 
 #define PORTABLE 1
 #define EXTERN

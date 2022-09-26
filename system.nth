@@ -1,5 +1,7 @@
 : # 10 dp @ scan pop ;
-# Now we can write comments like this
+
+# ninth/system.nth
+# Copyright (C) J. M. Spivey 2022
 
 : ' word create ;
 

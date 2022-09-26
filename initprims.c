@@ -1,3 +1,6 @@
+// ninth/initprims.c
+// Copyright (C) 2022 J. M. Spivey
+
 #include "ninth.h"
 
 /* These primitives are used suring bootstrapping, but are replaced

@@ -1,4 +1,5 @@
-# native.s
+@ ninth/native.s
+@ Copyright (C) 2022 J. M. Spivey
 
 	.syntax unified
         .thumb

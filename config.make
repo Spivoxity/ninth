@@ -1,4 +1,5 @@
-# config.make
+# ninth/config.make
+# Copyright (C) 2022 J. M. Spivey
 
 ARCH := $(shell uname -m)
 

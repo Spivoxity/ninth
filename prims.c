@@ -1,3 +1,6 @@
+// ninth/prims.c
+// Copyright (C) 2022 J. M. Spivey
+
 #include "ninth.h"
 
 int *p_div(int *sp) {

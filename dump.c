@@ -1,4 +1,5 @@
-// dump2.c
+// ninth/dump.c
+// Copyright (C) 2022 J. M. Spivey
 
 #define PORTABLE 1
 #include "ninth.h"
