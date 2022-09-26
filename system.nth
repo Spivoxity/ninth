@@ -442,15 +442,17 @@ fi ;
 : reset # Delete any half-complete definition
   origin if origin dp ! 0 defbase ! fi ;
 
+variable phase cell allot 0 phase !
+
 : main
   reset
   do 
     phase @ 0 = if
-      -1 phase !  # Any quit will terminate the run
+      99 phase !  # Any quit will terminate the run
       args @ cell+ do dup @ ?dup while readfile cell+ od pop
       1 phase !
     else phase @ 1 = if
-      banner toplevel nl ." Bye" nl (done)
+      banner interactive on toplevel nl ." Bye" nl (done)
     else
       ." [Aborted]" nl (done)
     fi fi

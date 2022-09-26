@@ -150,7 +150,7 @@ void init(void) {
      defvar("pad", pad);
      defvar("MEM", mem);
      defvar("args", args);
-     defvar("phase", phase);
+     defvar("interactive", interactive);
 
      defconst("ENTER", A_ENTER);
      defconst("CONST", A_CONST);

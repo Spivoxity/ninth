@@ -92,10 +92,10 @@ int *p_accept(int *sp) {
      FILE *fp = infp;
 
      if (fp == NULL) {
-#ifndef INIT
-          printf("> "); 
-          fflush(stdout);
-#endif
+          if (interactive) {
+               printf("> "); 
+               fflush(stdout);
+          }
           fp = stdin;
      }
 

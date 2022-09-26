@@ -142,7 +142,7 @@ EXTERN char *inp;
 EXTERN int state;
 EXTERN unsigned *rp;
 EXTERN char **args;
-EXTERN int phase;
+EXTERN int phase, interactive;
 EXTERN void *sbase, *rbase;
 
 extern byte dmem[];

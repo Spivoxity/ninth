@@ -28,10 +28,8 @@ NINTHBOOT = kernel.o bootprims.o initprims.o init.o dump.o
 ninthboot: $(NINTHBOOT)
 	$(CC) $(CFLAGS) $^ -lm -o $@
 
-init.o initprims.o dump.o: CFLAGS += -DINIT
-
 boot%.o: %.c
-	$(CC) $(CFLAGS) -DINIT -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean: force
 	rm -f boot.s ninth ninthboot $(NINTH) $(NINTHBOOT)
