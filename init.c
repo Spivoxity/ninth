@@ -3,7 +3,7 @@
 #define PORTABLE 1
 #include "ninth.h"
 
-int dict;
+int dict, UNKNOWN;
 byte dmem[MEMSIZE];
 
 // header -- append dictionary entry
@@ -21,7 +21,7 @@ static int header(char *name) {
 
      p->d_next = dict;
      p->d_flags = 0;
-     p->d_action = 0;
+     p->d_action = A_UNKNOWN;
      p->d_data = 0;
      strcpy((char *) dp, name);
      dp += strlen(name) + 1;
@@ -66,7 +66,7 @@ void _prim_subr(char *name, unsigned subr, char *sym) {
 
 void _defvar(char *name, unsigned addr, char *sym) {
      int d = create(name);
-     defn(d)->d_action = A_CONST;
+     defn(d)->d_action = A_VAR;
      defn(d)->d_data = addr;
      defsym(defn(d), addr, sym);
 }
@@ -89,7 +89,7 @@ ushort W(char *name) {
      return create(name);
 }
 
-#define L(n) W("lit"), n
+#define L(n) W("(lit)"), n
 
 #define END 0xdeadbeef
 
@@ -133,7 +133,7 @@ void init(void) {
      defvar("rp", rp);
      defvar("inp", inp);
      defvar("defbase", defbase);
-     defvar("trace", trace);
+     defvar("tracing", tracing);
      defvar("dict", dict);
      defvar("pad", pad);
      defvar("MEM", mem);
@@ -142,6 +142,8 @@ void init(void) {
 
      defconst("ENTER", A_ENTER);
      defconst("CONST", A_CONST);
+     defconst("VAR", A_VAR);
+     defconst("UNKNOWN", A_UNKNOWN);
      defconst("MEMSIZE", MEMSIZE);
 
 #define __SUBR(name, func)  prim_subr(name, func);
@@ -152,6 +154,7 @@ void init(void) {
      prim_action("?comp", A_POP);
      prim_action("init-locals", A_NOP);
      prim_action("pop-locals", A_NOP);
+     prim_action("unknown", A_QUIT);
      prim_subr("genword", p_gentok);
      assemble("?tag", W("pop"), W("pop"), END);
 
@@ -161,25 +164,26 @@ void init(void) {
               W("?colon"), W("1"), W("state"), W("!"), 
               W("word"), W("create"), W("align"),
               W("dp"), W("@"), W("defbase"), W("!"), W("init-locals"),
-              W("lit"), W(":"), END);
+              W("(lit)"), W(":"), END);
      immediate(":");
 
      // : ; immediate ['] : ?tag pop-locals 0 gentok 0 state ! 
      //   ENTER defbase @ defword 0 defbase ! ;
      assemble(";",
-              W("lit"), W(":"), W("?tag"), W("pop-locals"),
+              W("(lit)"), W(":"), W("?tag"), W("pop-locals"),
               W("0"), W("gentok"), W("0"), W("state"), W("!"),
               W("ENTER"), W("defbase"), W("@"), W("defword"), 
               W("0"), W("defbase"), W("!"), END);
      immediate(";");
 
      // : litnum dup dup 16 lsl 16 asr = if
-     //    quote lit gentok else quote lit2 dup gentok 16 lsr gentok fi ;
+     //    quote (lit) gentok else quote (lit2) dup gentok 16 lsr gentok fi ;
      assemble("litnum", 
               W("dup"), W("dup"), L(16), W("lsl"), L(16), W("asr"),
               W("="), W("(branch0)"), 6,
-              W("lit"), W("lit"), W("gentok"), W("gentok"), W("(branch)"), 9,
-              W("lit"), W("lit2"), W("gentok"), W("dup"), W("gentok"),
+              W("(lit)"), W("(lit)"), W("gentok"), W("gentok"),
+              W("(branch)"), 9, W("(lit)"), W("(lit2)"), W("gentok"),
+              W("dup"), W("gentok"),
               L(16), W("lsr"), W("gentok"), END);
 
      // : immword dup immed? if execute else genword fi ;
@@ -209,17 +213,20 @@ void init(void) {
               W("interp"), W("(branch)"), -15,
               W("pop"), END);
 
-     // : main 0 state ! do accept inp @ while repl od
+     // : main 0 state ! do accept inp @ while repl od (done)
      assemble("main",
               W("0"), W("state"), W("!"),
               W("accept"), W("inp"), W("@"),
-              W("(branch0)"), 3, W("repl"), W("(branch)"), -8, END);
+              W("(branch0)"), 3, W("repl"), W("(branch)"), -8,
+              W("(done)"), END);
 }
 
 int main(void) {
      dict = -1;
      bp = mem;
      dp = dmem;
+     sbase = &mem[MEMSIZE - 4];
+     rbase = &rstack[RSTACK];
      init();
      run(find("main"));
      dump();

@@ -3,11 +3,6 @@
 #define PORTABLE 1
 #include "ninth.h"
 
-void show_stack(int *sp) {
-     for (int *p = sp; p < (int *) &mem[SBASE]; p++)
-          printf(" %d", *p);
-}
-
 #define push(val) *sp-- = acc; acc = val
 #define binary(w) acc = sp[1] w acc; sp++
 #define get(ty) acc = * (ty *) acc
@@ -20,26 +15,21 @@ void run(int m) {
      int acc = 0, tmp;
 
 quit:
-     sp = (int *) &mem[SBASE];
-     rp = (unsigned *) &rstack[RSTACK];
+     sp = sbase;
+     rp = rbase;
      ip = (ushort *) defn(m)->d_data;
 
      while (1) {
-          if ((byte *) sp > &mem[SBASE]) {
-               printf("\nStack underflow!\n");
+          if (sp > (int *) sbase) {
+               underflow();
                goto quit;
           }
 
           w = defn(*ip++);
 
      reswitch:
-          if (trace && w->d_action != A_EXIT) {
-               *sp = acc;
-               printf("--");
-               show_stack(sp);
-               printf(" : [%d] %s\n",
-                      (unsigned *) &rstack[RSTACK] - rp, def_name(w));
-          }
+          *sp = acc;
+          if (tracing) trace(sp, rp, w);
 
           switch (w->d_action) {
           case A_NOP:
@@ -49,8 +39,10 @@ quit:
                goto quit;
 
           case A_UNKNOWN:
-               printf("%s is unknown\n", def_name(w));
-               goto quit;
+               *sp-- = acc;
+               acc = (int) def_name(w);
+               w = defn(UNKNOWN);
+               goto reswitch;
 
           case A_ENTER:
                *--rp = (unsigned) ip;
@@ -58,7 +50,6 @@ quit:
                break;
 
           case A_EXIT:
-               if (rp >= (unsigned *) &rstack[RSTACK]) return;
                ip = (ushort *) *rp++;
                break;
 
@@ -71,6 +62,9 @@ quit:
                acc = *sp;
                break;
 
+          case A_DONE:
+               return;
+
           case A_ZERO: push(0); break;
           case A_ONE: push(1); break;
           case A_TWO: push(2); break;
@@ -79,9 +73,8 @@ quit:
           case A_ADD: binary(+); break;
           case A_SUB: binary(-); break;
           case A_MUL: binary(*); break;
-          case A_DIV: binary(/); break;
-          case A_MOD: binary(%); break;
           case A_INC: acc++; break;
+          case A_DEC: acc--; break;
           case A_EQ: binary(==); break;
           case A_LESS: binary(<); break;
           case A_AND: binary(&); break;
@@ -122,21 +115,7 @@ quit:
                break;
 
           case A_ROT:
-               tmp = sp[2]; sp[2] = sp[1]; sp[1] = acc; acc = tmp;
-               break;
-
-          case A_ROLL:
-               if (acc >= 0) {
-                    sp++;
-                    tmp = sp[acc];
-                    while (acc > 0) { sp[acc] = sp[acc-1]; acc--; }
-                    acc = tmp;
-               } else {
-                    acc = -acc; tmp = 0;
-                    while (tmp <= acc) { sp[tmp] = sp[tmp+1]; tmp++; }
-                    sp[acc+1] = sp[0];
-                    acc = *++sp;
-               }
+               tmp = sp[1]; sp[1] = acc; acc = sp[2]; sp[2] = tmp;
                break;
 
           case A_POP:
@@ -186,6 +165,7 @@ quit:
                break;
 
           case A_CONST:
+          case A_VAR:
                push(w->d_data);
                break;
 

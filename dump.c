@@ -62,10 +62,13 @@ void dump(void) {
 
                if (k < nsyms && d->d_data == addrs[k])
                     printf("sym(%s),", syms[k]);
-               else if (d->d_action == A_ENTER && (byte *) d->d_data >= dmem
-			&& (byte *) d->d_data < dp) {
+               else if (d->d_action == A_ENTER) {
+                    assert ((byte *) d->d_data >= dmem
+                            && (byte *) d->d_data < dp);
 		    assert((unsigned) d->d_data % 4 == 0);
                     printf("sym(&rom[%d]),", ((byte *) d->d_data - dmem)/4);
+               } else if (d->d_action == A_VAR) {
+                    printf("sym(&mem[%d]),", (byte *) d->d_data - mem);
 	       } else {
                     printf("%#x,", (int) d->d_data);
 	       }
@@ -95,5 +98,6 @@ void dump(void) {
 
      printf("int dict = %d;\n", dict);
      printf("const unsigned BOOTSIZE = %d;\n", bp - mem);
-     printf("const int MAIN = %d;\n", find("main"));
+     printf("int MAIN = %d;\n", find("main"));
+     printf("int UNKNOWN = %d;\n", find("unknown"));
 }

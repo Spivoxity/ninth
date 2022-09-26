@@ -75,10 +75,11 @@ void dump(void) {
 		    char *sym = syms[k];
 		    if (*sym == '&') sym++;
                     printf("\t.long %s\n", sym);
-	       } else if (d->d_action == A_ENTER && (byte *) d->d_data >= dmem
-			  && (byte *) d->d_data < dp) {
+	       } else if (d->d_action == A_ENTER) {
                     assert((unsigned) d->d_data % 4 == 0);
                     printf("\t.long rom+%d\n", (byte *) d->d_data - dmem);
+               } else if (d->d_action == A_VAR) {
+                    printf("\t.long mem+%d\n", (byte *) d->d_data - mem);
 	       } else {
                     printf("\t.long %#x\n", (int) d->d_data);
 	       }
@@ -108,7 +109,7 @@ void dump(void) {
      printf("\n");
 
      n = 0;
-     printf("\t.globl boot\n");
+     printf("\t.global boot\n");
      printf("\t.p2align 2\n");
      printf("boot:\n");
      for (unsigned *p = (unsigned *) mem; p < (unsigned *) bp; p++) {
@@ -121,18 +122,23 @@ void dump(void) {
      }
      printf("\n");
 
-     printf("\t.globl BOOTSIZE\n");
+     printf("\t.global BOOTSIZE\n");
      printf("\t.p2align 2\n");
      printf("BOOTSIZE:\n");
      printf("\t.long %d\n\n", bp - mem);
 
-     printf("\t.globl MAIN\n");
+     printf("\t.data\n");
+     printf("\t.global MAIN\n");
      printf("\t.p2align 2\n");
      printf("MAIN:\n");
      printf("\t.long %d\n\n", find("main"));
 
-     printf("\t.data\n");
-     printf("\t.globl dict\n");
+     printf("\t.global UNKNOWN\n");
+     printf("\t.p2align 2\n");
+     printf("UNKNOWN:\n");
+     printf("\t.long %d\n\n", find("unknown"));
+
+     printf("\t.global dict\n");
      printf("\t.p2align 2\n");
      printf("dict:\n");
      printf("\t.long %d\n", dict);

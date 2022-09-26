@@ -7,8 +7,6 @@
 #define MEMSIZE 32768
 #define RSTACK 1024
 
-#define SBASE (MEMSIZE-4)
-
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -46,33 +44,33 @@ typedef struct {
 #define IMMED 1
 
 /* List of actions: those listed with action are entered in the
-   initial dictionary, and those listed with action0 are not.  UNKNOWN
-   must come first, so it is at index 0, and E_N_D must come second,
-   so that it corresponds to token 0. */
+   initial dictionary, and those listed with action0 are not.  E_N_D 
+   must come first, so that it corresponds to token 0. */
 #define ACTIONS(action, action0) \
-     action0(A_UNKNOWN) action("e_n_d", A_EXIT) action0(A_NOP) \
+     action("e_n_d", A_EXIT) action0(A_NOP) \
      action("quit", A_QUIT) action0(A_ENTER) \
      action("0", A_ZERO) action("1", A_ONE) action("2", A_TWO) \
      action("3", A_THREE) action("4", A_FOUR) \
-     action("+", A_ADD) action("-", A_SUB) \
-     action("*", A_MUL) action("/", A_DIV) action("1+", A_INC)     \
-     action("mod", A_MOD) action("=", A_EQ) action("<", A_LESS) \
+     action("+", A_ADD) action("-", A_SUB) action("*", A_MUL) \
+     action("1+", A_INC) action("1-", A_DEC)               \
+     action("=", A_EQ) action("<", A_LESS)                      \
      action("u<", A_ULESS) action("and", A_AND) action("lsl", A_LSL) \
      action("lsr", A_LSR) action("asr", A_ASR) action("or", A_OR) \
      action("xor", A_XOR) action("@", A_GET) action("!", A_PUT) \
      action("ch@", A_CHGET) action("ch!", A_CHPUT) \
      action("tok@", A_TOKGET) action("tok!", A_TOKPUT) \
      action("dup", A_DUP) action("?dup", A_QDUP) \
-     action("pick", A_PICK) action("roll", A_ROLL) action("pop", A_POP) \
+     action("pick", A_PICK) action("pop", A_POP) \
      action("swap", A_SWAP) action("r>", A_RPOP) action(">r", A_RPUSH) \
      action("r@", A_RAT) action("rot", A_ROT) \
      action("(branch0)", A_BRANCH0) action("(branch)", A_BRANCH) \
-     action("lit", A_LIT) action("lit2", A_LIT2)                 \
+     action("(lit)", A_LIT) action("(lit2)", A_LIT2)                 \
      action("execute", A_EXECUTE) action0(A_CALL) \
-     action0(A_CONST) action("over", A_OVER) action("tuck", A_TUCK) \
-     action("nip", A_NIP) \
+     action0(A_CONST) action0(A_VAR) \
+     action("over", A_OVER) action("tuck", A_TUCK) action("nip", A_NIP) \
      action("(locals)", A_LOCALS) action("(get-local)", A_GETLOC) \
-     action("(set-local)", A_SETLOC) action("(pop-locals)", A_POPLOCS)
+     action("(set-local)", A_SETLOC) action("(pop-locals)", A_POPLOCS) \
+     action("(done)", A_DONE) action0(A_UNKNOWN) 
 
 /* The ACTIONS macro is used several times, and here is the first: an
    enumerated type. */
@@ -102,6 +100,9 @@ enum {
      prim("align", p_align) \
      prim("strcmp", p_strcmp) \
      prim("depth", p_depth) \
+     prim("/", p_div) \
+     prim("mod", p_mod) \
+     prim("roll", p_roll) \
      prim("f+", p_fadd) \
      prim("f-", p_fsub) \
      prim("f*", p_fmul) \
@@ -136,12 +137,13 @@ extern int dict;
 
 EXTERN byte *defbase;
 EXTERN byte *dp;
-EXTERN int trace;
+EXTERN int tracing;
 EXTERN char *inp;
 EXTERN int state;
 EXTERN unsigned *rp;
 EXTERN char **args;
 EXTERN int phase;
+EXTERN void *sbase, *rbase;
 
 #ifdef INIT
 extern byte dmem[];
@@ -155,6 +157,8 @@ EXTERN byte *bp;
 
 /* kernel.c */
 void run(int m);
+void trace(int *sp, unsigned *rp, def *w);
+void underflow(void);
 
 /* init.c */
 int create(char *name);
@@ -172,4 +176,4 @@ void dump(void);
 
 extern const unsigned boot[];
 extern const unsigned BOOTSIZE;
-extern const int MAIN;
+extern int MAIN, UNKNOWN;

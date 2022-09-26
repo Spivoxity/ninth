@@ -19,12 +19,12 @@
 
 # Abbreviations
 : invert -1 xor ;
-: 1- 1 - ;
 : 2/ 1 asr ;
 : 4/ 2 asr ;
 : cell 4 ;
 : cell+ 4 + ;
 : cell- 4 - ;
+: tok 2 ;
 : toks 2 * ;
 : uxth 16 lsl 16 lsr ;
 : space 32 putc ;
@@ -50,10 +50,10 @@
 # dup @ -rot ! ;
 
 # Quotations
-: ['] immediate lit lit gentok ' gentok ;
+: ['] immediate (lit) (lit) gentok ' gentok ;
 : [compile] immediate ' gentok ;
 : quote immediate [compile] ['] ['] gentok gentok ;
-: [lit] quote lit gentok ;
+: [lit] quote (lit) gentok ;
 
 # Storage allocation
 # When bootstrapping, HERE is the location of DP in the ROM, and THERE
@@ -64,7 +64,7 @@
 : gentok here dup tok+ dp ! tok! ;
 : , here dup cell+ dp ! ! ;
 : constant ' CONST rot defword ;
-: variable ' bp @ cell aligned bp ! CONST there defword ;
+: variable ' bp @ cell aligned bp ! VAR there defword ;
 # : allot dup there swap memzero there + bp ! ;
 : allot there + bp ! ;
 
@@ -145,11 +145,11 @@
 : [char] immediate [?comp] char [lit] ;
 : strlen dup do dup ch@ while 1+ od swap - ;
 : putstr do dup ch@ ?dup while putc 1+ od pop ;
-: litstr r> dup tok+ swap tok@ over + >r ;
+: (litstr) r> dup tok+ swap tok@ over + >r ;
 : puttok tok>name putstr ;
 
 : " immediate
-  [?comp] quote litstr 0 gentok [char] " here scan 
+  [?comp] quote (litstr) 0 gentok [char] " here scan 
   strlen 1+ 2 aligned dup here 2 - tok! here + dp ! ;
 
 : ." immediate [?comp] [compile] " quote putstr ;
@@ -197,7 +197,7 @@ pop 0 swap ch! pop inp @ dup ch@ if 1+ inp ! fi ;
   # Lay out the definition
   dict @ gentok  # next
   0 gentok       # flags
-  0 ,            # action
+  UNKNOWN ,      # action
   0 ,            # data
   savestr        # name
 
@@ -256,8 +256,6 @@ fi ;
 variable locbase cell allot
 variable locvar 32 toks allot
 variable nlocals cell allot
-
-locvar @ . nl
 
 : init-locals
   0 nlocals ! 0 locbase ! ;
@@ -333,6 +331,23 @@ locvar @ . nl
 
 : spaces times space repeat ;
 
+# x CASE 1 => 11 | 2 => 22 | 33 ESAC
+: case immediate
+  quote >r 
+  locbase inc
+  0 ['] case ;
+: => immediate [?tag] case
+  quote r@ quote = branch0>
+  ['] => ;
+: | immediate [?tag] =>
+  branch> swap >label swap 1+ 
+  ['] case ;
+: esac immediate
+  # Handle missing default case
+  dup ['] => = if pop >label else [?tag] case fi
+  times >label repeat quote rpop
+  locbase dec ;
+
 
 # Token attributes
 
@@ -374,8 +389,8 @@ dict @ do dup 0 >= while 2dup = if 2pop 1 exit fi tok>next od 2pop 0 ;
 
 : seestr dup tok@ swap tok+ tuck + swap putstr ;
 
-' branch HASARG set-attr
-' branch0 HASARG set-attr
+' (branch) HASARG set-attr
+' (branch0) HASARG set-attr
 ' (locals) HASARG set-attr
 ' (get-local) HASARG set-attr
 ' (set-local) HASARG set-attr
@@ -383,15 +398,15 @@ dict @ do dup 0 >= while 2dup = if 2pop 1 exit fi tok>next od 2pop 0 ;
 
 : seeword # Disassemble word and advance pointer
   dup tok@
-  dup ['] litstr = if 
+  dup ['] (litstr) = if 
     pop [char] " putc space tok+ seestr [char] " putc space
   else
-    dup ['] lit = if 
+    dup ['] (lit) = if 
       pop ." #" tok+ dup tok@ .
-    else dup ['] lit2 = if
+    else dup ['] (lit2) = if
       pop ." ##" tok+ dup tok@ uxth swap tok+ tuck tok@ 16 lsl + .
     else dup HASARG attr? if
-      puttok [char] : putc tok+ dup tok@ .
+      puttok ." :" tok+ dup tok@ .
     else dup isword if 
       puttok space
     else . fi fi fi fi
@@ -430,20 +445,24 @@ fi ;
 
 : main
   reset
-  do
+  do 
     phase @ 0 = if
       -1 phase !  # Any quit will terminate the run
       args @ cell+ do dup @ ?dup while readfile cell+ od pop
       1 phase !
     else phase @ 1 = if
-      banner toplevel nl ." Bye" nl exit
+      banner toplevel nl ." Bye" nl (done)
     else
-      ." [Aborted]" nl exit
+      ." [Aborted]" nl (done)
     fi fi
   od ;
 
-: unknown # Unknown word in outer interpreter
-error putstr ."  is undefined" nl quit ;
+: fac ?dup if dup 1- fac * else 1 fi ;
+
+: tmain 6 fac . (done) ;
+
+: unknown 
+  error putstr ."  is undefined" nl quit ;
 
 : ?comp # Called from compile-only words via [?comp]
 state @ if pop else
@@ -455,5 +474,74 @@ state @ if error ." already in compile state -- maybe missing ;" nl fi ;
 
 : ?tag # Check tags for control structure
 depth 2 >= if != else 1 fi if error ." bad nesting" nl quit fi ;
+
+
+# Tracing
+
+variable t-loc cell allot
+variable t-base cell allot
+variable t-tmp cell allot
+
+: t-dump nl depth 5 min do ?dup while dup pick . 1- od ." : " ;
+
+: t-gettok t-loc @ tok@ t-loc tok incr ;
+: t-dobranch toks t-loc swap incr ;
+  
+: t-lit t-dump t-gettok dup . ;
+: t-lit2 t-dump t-gettok uxth t-gettok 16 lsl + dup . ;
+: t-branch0 t-dump ." IF" t-gettok swap if pop else t-dobranch fi ;
+: t-branch t-gettok t-dobranch ;
+
+: t-locals t-dump ." (locals):"
+  r> t-gettok dup .      # (x1 x2 ... xn ra n :)
+  do ?dup while          # (x1 x2 ... x[k] ra k : x[k+1] ... x[n])
+    rot                  # (x1 x2 ... ra k x[k] : x[k+1] ... x[n])
+    >r 1-                # (x1 x2 ... ra k-1 : x[k] x[k+1] ... x[n])
+  od                     # (ra : x1 ... xn)
+  >r ;                   # (: ra x1 ... xn)
+
+: t-getlocal t-dump ." (get-local):" t-gettok dup . 1 + cells rp @ + @ ;
+: t-setlocal t-dump ." (set-local):" t-gettok dup . 1 + cells rp @ + ! ;
+: t-poplocals t-dump ." (pop-locals):" r> t-gettok dup . cells rp @ + rp ! >r ;
+
+: t-enter
+  >r t-dump r> dup puttok space ." [ "
+  r> swap t-loc @ >r tok>data t-loc ! >r ;
+
+: t-exec
+  # Hide the token on the r-stack while we dump the stack.
+  >r t-dump r> dup puttok space
+  # Then hide our return address in t-tmp while we execute the token,
+  # in case it looks at the r-stack.
+  r> t-tmp ! execute t-tmp @ >r ;
+
+: t-trace
+  tok>data t-loc ! rp @ t-base ! 
+  do
+    t-gettok ?dup if
+      case ['] (lit) => ['] t-lit
+        | ['] (lit2) => ['] t-lit2
+        | ['] (branch) => ['] t-branch
+        | ['] (branch0) => ['] t-branch0
+        | ['] (locals) => ['] t-locals
+        | ['] (get-local) => ['] t-getlocal
+        | ['] (set-local) => ['] t-setlocal
+        | ['] (pop-locals) => ['] t-poplocals
+        | r@ dup tok>action ENTER = if ['] t-enter else ['] t-exec fi
+      esac execute
+    else rp @ t-base @ < if
+      ." ] " r> t-loc !
+    else
+      t-dump ." Done" nl exit
+    fi fi
+  od ;
+
+: trace
+  ' dup tok>action ENTER != if
+    dup ." (" puttok ."  is not traceable) " execute
+  else
+    ." Tracing " dup puttok ." ... " t-trace
+  fi ;
+
 
 names

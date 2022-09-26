@@ -15,7 +15,7 @@
   2 pick 9 = if
     over . nl
   else
-    10 1 for
+    10 1 for i
       dup i member if
         2 pick 1+ 
         2 pick 10 * i +

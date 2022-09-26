@@ -1,6 +1,6 @@
 include config.make
 
-all: ninth ninth2
+all: ninth-arm.elf
 
 NINTH = kernel.o prims.o boot.o main.o
 ninth: $(NINTH)
@@ -9,6 +9,16 @@ ninth: $(NINTH)
 NINTH2 = kernel.o prims.o boot2.o main.o
 ninth2: $(NINTH2)
 	$(CC) $(CFLAGS) $^ -lm -o $@
+
+NINTH-ARM = native-a.o prims-a.o boot2-a.o main-a.o
+ninth-arm.elf: $(NINTH-ARM)
+	$(ARMCC) $(ARMCFLAGS) $^ -lm -o $@
+
+%-a.o: %.c
+	$(ARMCC) $(ARMCFLAGS) -c $< -o $@
+
+%-a.o: %.s
+	$(ARMCC) $(ARMCFLAGS) -c $< -o $@
 
 boot.c: ninthboot system.nth script
 	./ninthboot <system.nth >tmpa
@@ -20,7 +30,7 @@ boot.c: ninthboot system.nth script
 
 boot2.s: ninthboot2 system.nth script2
 	./ninthboot2 <system.nth >tmpa
-	sed -f script2 tmpa
+	sed -n -f script2 tmpa
 	test -s $@
 
 boot2.o: boot2.s
@@ -42,11 +52,15 @@ boot%.o: %.c
 clean: force
 	rm -f boot.c ninth ninthboot $(NINTH) $(NINTHBOOT) tmpa
 	rm -f boot2.s ninth2 ninthboot2 $(NINTH2) $(NINTHBOOT2)
+	rm -f ninth-arm.elf $(NINTH-ARM)
 
 force:
 
 CC = gcc
 CFLAGS = -O2 -Wall -fno-strict-aliasing $(HOSTCFLAGS)
+
+ARMCC = arm-linux-gnueabihf-gcc
+ARMCFLAGS = -O2 -Wall -fno-strict-aliasing
 
 ###
 

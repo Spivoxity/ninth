@@ -6,6 +6,31 @@ byte *rstack[RSTACK];
 char inbuf[INBUF];
 char pad[PAD];
 
+int *p_div(int *sp) {
+     sp[1] = sp[1] / sp[0];
+     sp++; return sp;
+}
+
+int *p_mod(int *sp) {
+     sp[1] = sp[1] % sp[0];
+     sp++; return sp;
+}
+
+int *p_roll(int *sp) {
+     int n = *sp++, tmp;
+     if (n >= 0) {
+          tmp = sp[n];
+          while (n > 0) { sp[n] = sp[n-1]; n--; }
+          sp[0] = tmp;
+     } else {
+          int *ep = sp - n;
+          tmp = ep[n];
+          while (n < 0) { ep[n] = ep[n+1]; n++; }
+          ep[0] = tmp;
+     }
+     return sp;
+}
+
 #define FLO(a) (* (float *) (a))
 
 #define float_op(name, op) \
@@ -131,7 +156,7 @@ int *p_strcmp(int *sp) {
 }
 
 int *p_depth(int *sp) {
-     int r = (int *) &mem[SBASE] - sp;
+     int r = (int *) sbase - sp;
      *--sp = r;
      return sp;
 }
@@ -207,3 +232,15 @@ int *p_scan(int *sp) {
      return sp;
 }     
 #endif
+
+void trace(int *sp, unsigned *rp, def *w) {
+     printf("--");
+     for (int *p = (int *) sbase - 1; p >= sp; p--)
+          printf(" %d", *p);
+     printf(" : [%d] %s\n",
+            (unsigned *) &rstack[RSTACK] - rp, def_name(w));
+}
+
+void underflow(void) {
+     printf("\nStack underflow!\n");
+}
