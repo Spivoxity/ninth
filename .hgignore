@@ -1,3 +1,9 @@
 syntax: glob
 *~
 *.o
+boot.s
+boot2.s
+ninth
+ninth-arm.elf
+ninthboot
+tmpa

@@ -65,7 +65,6 @@
 : , here dup cell+ dp ! ! ;
 : constant ' CONST rot defword ;
 : variable ' bp @ cell aligned bp ! VAR there defword ;
-# : allot dup there swap memzero there + bp ! ;
 : allot there + bp ! ;
 
 # Dictionary layout
@@ -456,10 +455,6 @@ fi ;
       ." [Aborted]" nl (done)
     fi fi
   od ;
-
-: fac ?dup if dup 1- fac * else 1 fi ;
-
-: tmain 6 fac . (done) ;
 
 : unknown 
   error putstr ."  is undefined" nl quit ;

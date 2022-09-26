@@ -1,10 +1,22 @@
 // init.c
 
 #define PORTABLE 1
+#define EXTERN
 #include "ninth.h"
+
+byte mem[MEMSIZE];
+byte *rstack[RSTACK];
+char inbuf[INBUF];
+char pad[PAD];
 
 int dict, UNKNOWN;
 byte dmem[MEMSIZE];
+byte *bp;
+
+// underflow -- report stack underflow
+void underflow(void) {
+     printf("\nStack underflow!\n");
+}
 
 // header -- append dictionary entry
 static int header(char *name) {

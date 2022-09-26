@@ -8,6 +8,14 @@
 #define get(ty) acc = * (ty *) acc
 #define put(ty) * (ty *) acc = sp[1]; sp += 2; acc = *sp
 
+void trace(int *sp, unsigned *rp, def *w) {
+     printf("--");
+     for (int *p = (int *) sbase - 1; p >= sp; p--)
+          printf(" %d", *p);
+     printf(" : [%d] %s\n",
+            (unsigned *) &rstack[RSTACK] - rp, def_name(w));
+}
+
 void run(int m) {
      int *sp;
      ushort *ip;

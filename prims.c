@@ -1,10 +1,4 @@
-#define EXTERN
 #include "ninth.h"
-
-byte mem[MEMSIZE];
-byte *rstack[RSTACK];
-char inbuf[INBUF];
-char pad[PAD];
 
 int *p_div(int *sp) {
      sp[1] = sp[1] / sp[0];
@@ -115,7 +109,6 @@ int *p_accept(int *sp) {
           return sp;
      }
 
-     printf(">>> %s", inbuf); fflush(stdout);
      inp = inbuf;
      return sp;
 }
@@ -159,88 +152,4 @@ int *p_depth(int *sp) {
      int r = (int *) sbase - sp;
      *--sp = r;
      return sp;
-}
-
-#ifdef INIT
-int *p_immed(int *sp) {
-     sp[0] = ((defn(sp[0])->d_flags & IMMED) != 0);
-     return sp;
-}
-
-int *p_word(int *sp) {
-     char *p = pad;
-
-     while (*inp != '\0' && isspace(*inp)) inp++;
-     while (*inp != '\0' && !isspace(*inp))
-          *p++ = *inp++;
-     if (*inp != '\0') inp++;
-     *p = '\0';
-     
-     *--sp = (int) pad;
-     return sp;
-}
-
-int *p_align(int *sp) {
-     dp = ALIGN(dp, 4);
-     return sp;
-}
-
-int *p_gentok(int *sp) {
-     * (short *) dp = *sp++; dp += sizeof(short);
-     return sp;
-}
-
-int *p_defword(int *sp) {
-     def *d = defn(sp[2]);
-     d->d_action = sp[1];
-     d->d_data = (unsigned) sp[0];
-     sp += 3;
-
-     printf("%s defined\n", def_name(d));
-     return sp;
-}
-
-int *p_create(int *sp) {
-     char *name = (char *) sp[0];
-     sp[0] = create(name);
-     return sp;
-}
-
-int *p_find(int *sp) {
-     // ( string -- def 1 ) or ( string -- string 0 )
-     int d = find((char *) *sp);
-     if (d < 0)
-          *--sp = 0;
-     else {
-          *sp = d;
-          *--sp = 1;
-     }
-     return sp;
-}
-
-int *p_scan(int *sp) {
-     char *base = (char *) sp[0];
-     char delim = sp[1];
-     char *p = base;
-
-     while (*inp != '\0' && *inp != delim)
-          *p++ = *inp++;
-     if (*inp != '\0') inp++;
-     *p++ = '\0';
-     
-     sp[1] = (int) base; sp++;
-     return sp;
-}     
-#endif
-
-void trace(int *sp, unsigned *rp, def *w) {
-     printf("--");
-     for (int *p = (int *) sbase - 1; p >= sp; p--)
-          printf(" %d", *p);
-     printf(" : [%d] %s\n",
-            (unsigned *) &rstack[RSTACK] - rp, def_name(w));
-}
-
-void underflow(void) {
-     printf("\nStack underflow!\n");
 }

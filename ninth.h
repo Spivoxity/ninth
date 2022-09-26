@@ -145,12 +145,8 @@ EXTERN char **args;
 EXTERN int phase;
 EXTERN void *sbase, *rbase;
 
-#ifdef INIT
 extern byte dmem[];
-EXTERN byte *bp;
-#else
-#define bp dp
-#endif
+extern byte *bp;
 
 #define ALIGN(p, n) ((byte *) (((unsigned) (p)+(n)-1) & ~((n)-1)))
 
