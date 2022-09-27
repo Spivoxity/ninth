@@ -3,6 +3,19 @@
 
 #include "ninth.h"
 
+// underflow -- report stack underflow
+void underflow(void) {
+     printf("\nStack underflow!\n");
+}
+
+void trace(int *sp, unsigned *rp, def *w) {
+     printf("--");
+     for (int *p = (int *) sbase - 1; p >= sp; p--)
+          printf(" %d", *p);
+     printf(" : [%d] %s\n",
+            (unsigned *) &rstack[RSTACK] - rp, def_name(w));
+}
+
 int *p_div(int *sp) {
      sp[1] = sp[1] / sp[0];
      sp++; return sp;

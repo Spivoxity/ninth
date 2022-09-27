@@ -63,7 +63,7 @@ typedef struct {
      action("dup", A_DUP) action("?dup", A_QDUP) \
      action("pick", A_PICK) action("pop", A_POP) \
      action("swap", A_SWAP) action("r>", A_RPOP) action(">r", A_RPUSH) \
-     action("r@", A_RAT) action("rot", A_ROT) \
+     action("rp", A_RP) action("rot", A_ROT)       \
      action("(branch0)", A_BRANCH0) action("(branch)", A_BRANCH) \
      action("(lit)", A_LIT) action("(lit2)", A_LIT2)                 \
      action("execute", A_EXECUTE) action0(A_CALL) \
@@ -141,7 +141,6 @@ EXTERN byte *dp;
 EXTERN int tracing;
 EXTERN char *inp;
 EXTERN int state;
-EXTERN unsigned *rp;
 EXTERN char **args;
 EXTERN int phase, interactive;
 EXTERN void *sbase, *rbase;

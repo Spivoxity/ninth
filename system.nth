@@ -18,6 +18,7 @@
 : 2pop pop pop ;
 : 2dup over over ;
 : rpop r> r> pop >r ;
+: r@ rp @ ;
 
 # Abbreviations
 : invert -1 xor ;
@@ -28,7 +29,8 @@
 : cell- 4 - ;
 : tok 2 ;
 : toks 2 * ;
-: uxth 16 lsl 16 lsr ;
+: tok- 2 - ;
+: uxth 0xffff and ;
 : space 32 putc ;
 : aligned 1- tuck + swap invert and ;
 : on 1 swap ! ;
@@ -206,10 +208,10 @@ pop 0 swap ch! pop inp @ dup ch@ if 1+ inp ! fi ;
   dup dict ! ;
 
 : moveblock # dest src nbytes -- assume 2-byte units
-do dup while   
-  2 - >r tuck r@ + tok@ # src dst x
+do ?dup while   
+  tok- >r tuck r@ + tok@ # src dst x
   over r@ + tok! swap r>
-od pop 2pop ;
+od 2pop ;
 
 # Reimplementation of create
 : create
@@ -499,9 +501,13 @@ variable t-tmp cell allot
   od                     # (ra : x1 ... xn)
   >r ;                   # (: ra x1 ... xn)
 
-: t-getlocal t-dump ." (get-local):" t-gettok dup . 1 + cells rp @ + @ ;
-: t-setlocal t-dump ." (set-local):" t-gettok dup . 1 + cells rp @ + ! ;
-: t-poplocals t-dump ." (pop-locals):" r> t-gettok dup . cells rp @ + rp ! >r ;
+: t-poplocals t-dump ." (pop-locals):"
+  r> t-gettok dup .
+  do ?dup while rpop 1- od
+  >r ;
+
+: t-getlocal t-dump ." (get-local):" t-gettok dup . 1+ cells rp + @ ;
+: t-setlocal t-dump ." (set-local):" t-gettok dup . 1+ cells rp + ! ;
 
 : t-enter
   >r t-dump r> dup puttok space ." [ "
@@ -515,7 +521,7 @@ variable t-tmp cell allot
   r> t-tmp ! execute t-tmp @ >r ;
 
 : t-trace
-  tok>data t-loc ! rp @ t-base ! 
+  tok>data t-loc ! rp t-base ! 
   do
     t-gettok ?dup if
       case ['] (lit) => ['] t-lit
@@ -528,7 +534,7 @@ variable t-tmp cell allot
         | ['] (pop-locals) => ['] t-poplocals
         | r@ dup tok>action ENTER = if ['] t-enter else ['] t-exec fi
       esac execute
-    else rp @ t-base @ < if
+    else rp t-base @ < if
       ." ] " r> t-loc !
     else
       t-dump ." Done" nl exit

@@ -14,11 +14,6 @@ int dict, UNKNOWN;
 byte dmem[MEMSIZE];
 byte *bp;
 
-// underflow -- report stack underflow
-void underflow(void) {
-     printf("\nStack underflow!\n");
-}
-
 // header -- append dictionary entry
 static int header(char *name) {
      def *p;
@@ -143,7 +138,6 @@ void init(void) {
      defvar("state", state);
      defvar("bp", bp);
      defvar("dp", dp);
-     defvar("rp", rp);
      defvar("inp", inp);
      defvar("defbase", defbase);
      defvar("tracing", tracing);

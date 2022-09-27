@@ -9,11 +9,6 @@ byte *rstack[RSTACK];
 char inbuf[INBUF];
 char pad[PAD];
 
-// underflow -- report stack underflow
-void underflow(void) {
-     printf("\nStack underflow!\n");
-}
-
 int main(int argc, char **argv) {
      memcpy(mem, boot, BOOTSIZE);
      dp = &mem[BOOTSIZE];
