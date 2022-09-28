@@ -18,7 +18,7 @@
 : 2pop pop pop ;
 : 2dup over over ;
 : rpop r> r> pop >r ;
-: r@ rp @ ;
+: r@ r> rp @ swap >r ;
 
 # Abbreviations
 : invert -1 xor ;
